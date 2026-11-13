@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { renderTaskCard } from "./task.js";
 
 const SHIPPED = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "prompts");
-const FILES = ["local", "haiku", "sonnet", "opus", "planner", "retry", "onboard"];
+const FILES = ["local", "haiku", "sonnet", "opus", "planner", "retry", "onboard", "review"];
 
 export function loadTemplates(promptsCfg) {
   const dir = path.join(promptsCfg.dir ? path.resolve(promptsCfg.dir) : SHIPPED, promptsCfg.version);

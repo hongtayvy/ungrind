@@ -7,6 +7,7 @@ import { runVerifiers } from "./verifiers/index.js";
 import { writeRunLog } from "./runlog.js";
 import { eventFor } from "./notify.js";
 import { agentFor, modelFor, singleRunner } from "./agents/index.js";
+import { reviewChange } from "./review.js";
 
 const rel = (repo, p) => path.relative(repo, p).split(path.sep).join("/");
 
@@ -89,7 +90,7 @@ export async function runOnce({ config, source, runner = null, runners = null, t
   record.branch = branch;
   log(`[ungrind] branch: ${branch}, starting tier: ${record.startTier}${dryRun ? " (dry run)" : ""}`);
 
-  let success = false, summary = "", failure = "", failsAtTier = 0, reason = null;
+  let success = false, summary = "", failure = "", failsAtTier = 0, reason = null, reviewNote = null;
   try {
     for (let n = 1; n <= config.guardrails.maxAttempts; n++) {
       const tier = ladder[tierIdx];
@@ -112,9 +113,25 @@ export async function runOnce({ config, source, runner = null, runners = null, t
         const bad = v.results.find((r) => !r.passed);
         if (bad) failText = `Check "${bad.name}" failed:\n${bad.output}`;
         else if (v.files.length === 0) failText = "The agent made no file changes, so nothing satisfies the task.";
+        else if (config.review.enabled) {
+          const rv = await reviewChange({ config, runners, templates, task, files: v.files, conventions });
+          attempt.review = { agent: rv.agent, model: rv.model, verdict: rv.verdict, issues: rv.issues.slice(0, 2000), costUsd: rv.costUsd, durationMs: rv.durationMs, crossVendor: rv.agent !== agent };
+          record.totalCostUsd += rv.costUsd;
+          log(`[ungrind] review by ${rv.agent}: ${rv.verdict ?? `no verdict (exit ${rv.exitCode})`}`);
+          if (rv.verdict !== "PASS") {
+            const what = rv.verdict === "FAIL" ? `failed:\n${rv.issues}` : `gave no verdict (exit ${rv.exitCode}):\n${rv.output.slice(-1500)}`;
+            if (config.review.blocking) failText = `Cross-vendor review by ${rv.agent} ${what}`;
+            else reviewNote = `Non-blocking review by ${rv.agent} ${what}`;
+          }
+        }
       }
 
-      if (!failText) { attempt.passed = true; success = true; summary = parsed.summary; break; }
+      if (!failText) {
+        attempt.passed = true; success = true;
+        summary = reviewNote ? `${parsed.summary}\n\n${reviewNote}` : parsed.summary;
+        break;
+      }
+      reviewNote = null;
 
       attempt.failure = failText.slice(0, 2000);
       failure = failText;

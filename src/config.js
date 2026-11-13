@@ -143,6 +143,13 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     }
   }
 
+  const rv = isObj(raw.review) ? raw.review : null;
+  const review = rv
+    ? { enabled: rv.enabled ?? true, agent: rv.agent ?? "codex", model: rv.model ?? null, blocking: rv.blocking ?? true, maxDiffChars: rv.maxDiffChars ?? 60_000 }
+    : { enabled: false };
+  if (review.enabled && !ADAPTERS.includes(review.agent)) err(`review.agent: unknown adapter "${review.agent}" (use ${ADAPTERS.join(", ")})`);
+  if (review.enabled && review.agent === "ollama" && !review.model) err("review.model: required when review.agent is ollama");
+
   const p = isObj(raw.prompts) ? raw.prompts : {};
   const stateDir = path.join(repo, p.stateDir ?? ".ungrind");
   const prompts = {
@@ -168,7 +175,7 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   }
 
   if (errors.length) return { config: null, errors };
-  return { config: { project: raw.project, repo, taskSource, verifiers, guardrails, routing, gates, agent, prompts, cron }, errors: [] };
+  return { config: { project: raw.project, repo, taskSource, verifiers, guardrails, routing, gates, agent, review, prompts, cron }, errors: [] };
 }
 
 export function loadConfig(file) {
