@@ -135,6 +135,13 @@ test("human gate skips gated types unless approved", async () => {
   assert.match(fs.readFileSync(path.join(dir, "tasks/a.md"), "utf8"), /status: Blocked/);
 });
 
+test("engine sends a notification with the run outcome", async () => {
+  const { dir, config } = makeRepo({ "a": card() });
+  const sent = [];
+  await run(dir, config, fakeRunner([write("src/value.txt", "new\n")]), { notify: async (e, r) => sent.push([e, r.result]) });
+  assert.deepEqual(sent, [["done", "done"]]);
+});
+
 test("dry run changes no task status and writes no notes", async () => {
   const { dir, config } = makeRepo({ "a": card() });
   const before = fs.readFileSync(path.join(dir, "tasks/a.md"), "utf8");

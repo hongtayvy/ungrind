@@ -108,10 +108,14 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     humanApprovalTypes: h.humanApprovalTypes ?? ["auth", "payments", "migration"],
     notify: {
       ntfyTopic: h.notify?.ntfyTopic ?? null,
+      server: h.notify?.server ?? "https://ntfy.sh",
+      tokenEnv: h.notify?.tokenEnv ?? null,
       on: h.notify?.on ?? ["done", "blocked", "skipped", "ceiling"],
     },
   };
   if (!strList(gates.humanApprovalTypes)) err("gates.humanApprovalTypes: must be a list of strings");
+  const EVENTS = ["done", "blocked", "skipped", "ceiling"];
+  if (!strList(gates.notify.on) || gates.notify.on.some((e) => !EVENTS.includes(e))) err(`gates.notify.on: must be a list of ${EVENTS.join(", ")}`);
 
   // Agent + prompts (engine plumbing, all optional)
   const a = isObj(raw.agent) ? raw.agent : {};

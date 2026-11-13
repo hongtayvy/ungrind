@@ -7,6 +7,7 @@ import { validateTask, readyCandidates } from "../src/task.js";
 import { runOnce } from "../src/engine.js";
 import { onboard, approve, plan } from "../src/onboard.js";
 import { readRunLog, passRateByPromptVersion } from "../src/runlog.js";
+import { createNotifier } from "../src/notify.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -67,6 +68,7 @@ async function main() {
         config, source: source(), runner: runner(), templates: templates(),
         dryRun: Boolean(args["dry-run"]), onlyId: typeof args.task === "string" ? args.task : null,
         skipConventions: Boolean(args["skip-conventions"]),
+        notify: createNotifier(config),
       });
       process.exitCode = r.result === "blocked" ? 2 : 0;
       return;

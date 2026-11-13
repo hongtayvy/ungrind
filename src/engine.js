@@ -5,6 +5,7 @@ import { slugify } from "./task.js";
 import { buildPrompt, parseAgentOutput, readConventions } from "./prompts.js";
 import { runVerifiers } from "./verifiers/index.js";
 import { writeRunLog } from "./runlog.js";
+import { eventFor } from "./notify.js";
 
 const rel = (repo, p) => path.relative(repo, p).split(path.sep).join("/");
 
@@ -27,19 +28,20 @@ function branchName(config, task) {
  * One run = at most one task. The engine (not the model) owns the queue, retry counts,
  * escalation, verification, logging and stop conditions.
  */
-export async function runOnce({ config, source, runner, templates, dryRun = false, onlyId = null, skipConventions = false, log = console.log }) {
+export async function runOnce({ config, source, runner, templates, dryRun = false, onlyId = null, skipConventions = false, log = console.log, notify = null }) {
   const started = Date.now();
   const record = {
     ts: new Date().toISOString(), project: config.project, dryRun, promptVersion: templates.version,
     task: null, startTier: null, branch: null, attempts: [], result: null, reason: null,
     totalCostUsd: 0, pushed: false, durationMs: 0,
   };
-  const finish = (result, reason = null) => {
+  const finish = async (result, reason = null) => {
     record.result = result;
     record.reason = reason;
     record.durationMs = Date.now() - started;
     writeRunLog(config.prompts.stateDir, record);
     log(`[ungrind] result: ${result}${reason ? ` (${reason})` : ""}`);
+    if (notify) await notify(eventFor(record), record);
     return record;
   };
 
