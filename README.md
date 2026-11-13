@@ -31,9 +31,76 @@ node bin/ungrind.js run --config demo-sandbox/ungrind.config.yaml --dry-run --sk
 | `onboard` | The strongest tier reads the repo (read-only) and drafts `.ungrind/conventions.draft.md` |
 | `approve` | Human approval: promotes the draft to `.ungrind/conventions.md` |
 | `plan --task id` | The planner proposes a crisper card. It prints only and never edits tasks |
-| `stats` | First-try pass rate per prompt version, from `.ungrind/runs.jsonl` |
+| `stats` | Pass rates per prompt and conventions version, plus per tier / agent / model, from `.ungrind/runs.jsonl` |
+| `cron [--print-crontab]` | Scheduled entry point: lock, usage pre-check, then up to `cron.maxTasksPerRun` tasks |
+| `propose` / `proposals` / `accept id` / `reject id` | Improvement proposals from the run log, applied only on human approval |
+| `bench [--fixture-config f] [--compare]` | Rerun the benchmark suite and compare prompt versions |
+| `board [--port n] [--out file]` | Read-only board of tasks and recent runs, localhost only |
 
 On a new repo, run `onboard`, read and edit the draft, then `approve`. Real runs refuse to start until a conventions file is approved.
+
+## V2
+
+### Local models first (Ollama)
+
+Put a local model on the bottom rung. A task tries it first and escalates to haiku → sonnet → opus when checks fail. Local attempts log `$0`, so `stats` and `bench` compare them directly with the paid tiers.
+
+```yaml
+routing:
+  ladder: [local, haiku, sonnet, opus]
+  tierBySize: { small: local, medium: local, large: sonnet }
+agent:
+  byTier: { local: ollama }
+  ollama:
+    models: { local: "qwen3.6-coding-16k:latest" }   # must already be installed (`ollama list`)
+    maxTurns: 40
+```
+
+Ollama serves models, not agents, so the adapter runs a small tool loop over `/api/chat`. The model gets five tools: `list_files`, `read_file`, `write_file`, `replace_in_file`, and `run_checks` (only the configured verifiers). It has no shell, and every path stays inside the repo, outside `.git`. A missing model is an error: Ungrind never pulls models. See `examples/demo/ungrind.local.yaml`.
+
+### Agents per tier or task type, and Codex
+
+`agent.byTier` beats `agent.byType` beats `agent.adapter` (default `claude-code`). Claude tiers take models from `routing.models`; other adapters take them from `agent.<adapter>.models` (Codex falls back to its own default model).
+
+```yaml
+agent:
+  byType: { ui: codex }
+  codex:
+    models: { sonnet: <codex model> }
+    pricing: { inputPerMTok: 1.25, outputPerMTok: 10 }   # optional; Codex reports tokens, not dollars
+```
+
+The Codex adapter runs `codex exec --json --ephemeral --skip-git-repo-check -C <repo> -s workspace-write -` with the prompt on stdin, per OpenAI's non-interactive docs. Without `pricing`, Codex attempts log $0 and the cost ceiling can't see them.
+
+### Cross-vendor review
+
+```yaml
+review:
+  agent: codex        # a different family than the builder catches what self-review misses
+  blocking: true      # FAIL or no verdict = failed attempt; issues go into the retry prompt
+```
+
+After the checks pass, the reviewer reads the task and the diff (read-only) and ends with `UNGRIND_REVIEW: PASS` or `FAIL` plus issues. In non-blocking mode, the issues are appended to the summary instead.
+
+### Notifications and cron
+
+```yaml
+gates:
+  notify: { ntfyTopic: my-topic, server: https://ntfy.sh, tokenEnv: NTFY_TOKEN, on: [done, blocked, skipped, ceiling] }
+cron:
+  maxTasksPerRun: 1
+  dailyUsd: 5            # budgets come from the run log (Claude Code's cost estimate on a subscription)
+  weeklyUsd: 25
+  maxRunsPerDay: 10
+  precheckCommand: null  # your own usage check; non-zero exit skips the run
+```
+
+`ungrind cron --print-crontab` prints a crontab line with absolute paths. It does not install it. A lock file stops overlapping runs.
+
+### Benchmarks and improvement proposals
+
+- `bench` runs `benchmarks/strings/suite.yaml`. Each case runs in a fresh temp git copy of the fixture, and results go to `results.jsonl` keyed by prompt version. Pass `--prompts-dir/--prompts-version` to benchmark a candidate prompt set before adopting it.
+- `propose` groups failed attempts by cause from the run log. Once there are at least `--min-failures` (default 3) new ones, the strongest tier drafts one conventions addition. The engine writes the evidence into the proposal itself. `accept` backs up the conventions file and appends the addition; `reject` closes the proposal. Runs record a conventions hash, so `stats` compares results before and after an accepted change.
 
 ## One run
 
@@ -56,7 +123,13 @@ bin/ungrind.js            CLI
 src/config.js             config schema, defaults, validation
 src/task.js               task contract, validation, queue order
 src/sources/              task source interface: local.js (markdown / Obsidian), notion.js
-src/agents/claude-code.js agent runner interface + Claude Code headless adapter
+src/agents/               runner interface + routing (index.js), claude-code.js, codex.js, ollama.js
+src/review.js             cross-vendor diff review
+src/notify.js, cron.js    ntfy alerts; cron wrapper with lock and usage pre-check
+src/bench.js              benchmark suite runner and comparison
+src/proposals.js          evidence-backed conventions proposals with human approval
+src/board.js              read-only board (localhost server or static HTML)
+benchmarks/strings/       benchmark suite + fixture repo
 src/verifiers/            command check + diff guard
 src/prompts.js            versioned templates with slots, output markers
 src/engine.js             the loop: routing, retry, escalation, stop, logging
@@ -111,9 +184,9 @@ The agent signals the engine with two markers: `UNGRIND_SUMMARY:` (the change su
 - **Card quality**: `validate` plus `plan --task <id>` is the v1 card helper. Bad cards are blocked with a reason, never guessed at.
 - **Push**: only if the configured remote exists. A push failure is logged and does not fail the task.
 
-## Not in v1
+## Not in scope
 
-Codex runner, notifications (the `gates.notify` config is parsed but nothing is sent yet), the cron wrapper with a usage pre-check, a benchmark set, improvement proposals, a board view, parallel runs, and auto-merge.
+Parallel task execution, auto-merge of any kind, and self-modifying prompts or configs. Proposals only change the conventions file after `accept`, and template changes are ordinary human commits. Someday: a PromptOut adapter for prompts, more task sources (GitHub Issues, Linear, Jira), and more verifier types.
 
 ```bash
 npm test
