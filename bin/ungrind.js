@@ -12,6 +12,7 @@ import { cronRun, crontabLine } from "../src/cron.js";
 import { fileURLToPath } from "node:url";
 import { loadSuite, runBench, compareBench, formatComparison } from "../src/bench.js";
 import { propose, listProposals, accept, reject } from "../src/proposals.js";
+import { serveBoard, writeBoard } from "../src/board.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -34,6 +35,8 @@ Commands:
   proposals            List proposals and their status
   accept <id>          Human approval: append the proposal's addition to the conventions file
   reject <id>          Mark a proposal rejected
+  board [--port 4477]  Read-only board of tasks and recent runs on http://127.0.0.1 (localhost only)
+      --out <file>       Write a static HTML snapshot instead of serving
   bench                Run the benchmark suite in throwaway copies of its fixture (no --config needed)
       --suite <file>     Suite file (default benchmarks/strings/suite.yaml)
       --fixture-config <name>  Config inside the fixture, e.g. ungrind.local.yaml
@@ -125,6 +128,13 @@ async function main() {
       const id = args._[1];
       if (!id) throw new Error(`${cmd} needs a proposal id (see \`ungrind proposals\`)`);
       (cmd === "accept" ? accept : reject)({ config, id });
+      return;
+    }
+    case "board": {
+      if (typeof args.out === "string") return console.log(`board written to ${await writeBoard(config, source(), args.out)}`);
+      const port = typeof args.port === "string" ? Number(args.port) : 4477;
+      await serveBoard(config, source(), { port });
+      console.log(`[ungrind] read-only board at http://127.0.0.1:${port} (Ctrl+C to stop)`);
       return;
     }
     case "onboard": await onboard({ config, runners: runners(), templates: templates() }); return;
