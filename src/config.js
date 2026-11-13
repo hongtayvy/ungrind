@@ -135,8 +135,22 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     requireConventions: p.requireConventions ?? true,
   };
 
+  const c = isObj(raw.cron) ? raw.cron : {};
+  const cron = {
+    maxTasksPerRun: c.maxTasksPerRun ?? 1,
+    dailyUsd: c.dailyUsd ?? null,
+    weeklyUsd: c.weeklyUsd ?? null,
+    maxRunsPerDay: c.maxRunsPerDay ?? null,
+    precheckCommand: c.precheckCommand ?? null,
+    lockStaleMin: c.lockStaleMin ?? 180,
+  };
+  if (!Number.isInteger(cron.maxTasksPerRun) || cron.maxTasksPerRun < 1) err("cron.maxTasksPerRun: must be a positive integer");
+  for (const k of ["dailyUsd", "weeklyUsd", "maxRunsPerDay"]) {
+    if (cron[k] != null && !(typeof cron[k] === "number" && cron[k] >= 0)) err(`cron.${k}: must be a non-negative number`);
+  }
+
   if (errors.length) return { config: null, errors };
-  return { config: { project: raw.project, repo, taskSource, verifiers, guardrails, routing, gates, agent, prompts }, errors: [] };
+  return { config: { project: raw.project, repo, taskSource, verifiers, guardrails, routing, gates, agent, prompts, cron }, errors: [] };
 }
 
 export function loadConfig(file) {

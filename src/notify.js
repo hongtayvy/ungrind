@@ -19,6 +19,7 @@ export function eventFor(record) {
   if (record.dryRun) return null;
   if (record.result === "done") return "done";
   if (record.result === "skipped" || record.result === "skipped-usage") return "skipped";
+  if (record.result === "error") return "blocked";
   if (record.result === "blocked") return /cost ceiling/.test(record.reason ?? "") ? "ceiling" : "blocked";
   return null;
 }

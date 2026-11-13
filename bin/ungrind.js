@@ -8,6 +8,8 @@ import { runOnce } from "../src/engine.js";
 import { onboard, approve, plan } from "../src/onboard.js";
 import { readRunLog, passRateByPromptVersion } from "../src/runlog.js";
 import { createNotifier } from "../src/notify.js";
+import { cronRun, crontabLine } from "../src/cron.js";
+import { fileURLToPath } from "node:url";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -19,6 +21,9 @@ Commands:
       --dry-run          Run agent and checks on a branch, but no push, no status or note writes
       --task <id>        Only run this task (it must be ready)
       --skip-conventions Run without an approved conventions file
+  cron                 Scheduled entry point: lock, usage pre-check, then up to cron.maxTasksPerRun tasks
+      --print-crontab    Print a crontab line for this project (does not install it)
+      --schedule "<expr>" Cron schedule for --print-crontab (default every 30 minutes)
   onboard              Strong model drafts .ungrind/conventions.draft.md (read-only)
   approve              Promote the reviewed draft to .ungrind/conventions.md
   plan --task <id>     Planner proposes a crisper card for a task (prints only)
@@ -71,6 +76,15 @@ async function main() {
         notify: createNotifier(config),
       });
       process.exitCode = r.result === "blocked" ? 2 : 0;
+      return;
+    }
+    case "cron": {
+      if (args["print-crontab"]) {
+        const schedule = typeof args.schedule === "string" ? args.schedule : undefined;
+        return console.log(crontabLine(config, { schedule, bin: fileURLToPath(import.meta.url) }));
+      }
+      const results = await cronRun({ config, source: source(), runner: runner(), templates: templates(), notify: createNotifier(config) });
+      process.exitCode = results.some((r) => r.result === "blocked" || r.result === "error") ? 2 : 0;
       return;
     }
     case "onboard": await onboard({ config, runner: runner(), templates: templates() }); return;
