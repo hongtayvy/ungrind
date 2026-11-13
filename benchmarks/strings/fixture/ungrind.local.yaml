@@ -1,0 +1,51 @@
+# Ungrind project config. Five sections: identity + task source, verifiers, guardrails, routing, gates.
+project: bench-strings-local
+repo: .
+
+taskSource:
+  adapter: local          # local | notion
+  path: tasks             # folder of markdown task cards (an Obsidian vault folder works too)
+  statuses:
+    ready: Ready
+    in_progress: In progress
+    done: Done
+    blocked: Blocked
+
+verifiers:                # run in order after every attempt; first failure stops the chain
+  - name: unit tests
+    command: npm test --silent
+    cwd: .
+    timeoutSec: 120
+
+guardrails:
+  forbiddenPaths: [".env", ".env.*", "**/secrets/**", "package-lock.json"]
+  branchPattern: "loop/{slug}"
+  maxAttempts: 6
+  maxChangedFiles: 10
+  push: true              # pushes only the loop branch, never force, never main
+
+routing:
+  tierBySize: { small: local, medium: local, large: sonnet }
+  defaultTier: local
+  ladder: [local, haiku, sonnet, opus]
+  failuresPerTier: 2
+  maxCostUsd: 3
+  # models: { haiku: claude-haiku-5-5, sonnet: claude-sonnet-5-5, opus: claude-opus-5-5 }
+
+gates:
+  humanApprovalTypes: [auth, payments, migration]
+  notify:                 # parsed now, sent in v2
+    ntfyTopic: null
+    on: [done, blocked, skipped, ceiling]
+
+# Local-first: every task tries a local Ollama model, then escalates haiku -> sonnet -> opus.
+# Local attempts are logged at $0. Use a model you already have (`ollama list`);
+# Ungrind never pulls models.
+agent:
+  byTier: { local: ollama }
+  ollama:
+    host: http://127.0.0.1:11434
+    models: { local: "qwen3.6-coding-16k:latest" }
+    maxTurns: 40
+    think: false
+  timeoutSec: 900

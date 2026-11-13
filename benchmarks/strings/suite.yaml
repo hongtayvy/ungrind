@@ -1,0 +1,7 @@
+# Benchmark suite: rerun whenever a prompt changes, like a regression suite.
+# Each case copies the fixture into a fresh git repo and runs one task through the full loop.
+name: strings
+fixture: fixture
+config: ungrind.config.yaml     # override with --fixture-config ungrind.local.yaml to benchmark the local tier
+repeat: 1
+cases: [slugify, truncate, fix-title-case]

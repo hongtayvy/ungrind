@@ -10,6 +10,7 @@ import { readRunLog, passRateByPromptVersion, statsByTier } from "../src/runlog.
 import { createNotifier } from "../src/notify.js";
 import { cronRun, crontabLine } from "../src/cron.js";
 import { fileURLToPath } from "node:url";
+import { loadSuite, runBench, compareBench, formatComparison } from "../src/bench.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -27,7 +28,12 @@ Commands:
   onboard              Strong model drafts .ungrind/conventions.draft.md (read-only)
   approve              Promote the reviewed draft to .ungrind/conventions.md
   plan --task <id>     Planner proposes a crisper card for a task (prints only)
-  stats                First-try pass rate per prompt version from the run log
+  stats                Pass rates per prompt version and per tier / agent / model from the run log
+  bench                Run the benchmark suite in throwaway copies of its fixture (no --config needed)
+      --suite <file>     Suite file (default benchmarks/strings/suite.yaml)
+      --fixture-config <name>  Config inside the fixture, e.g. ungrind.local.yaml
+      --prompts-dir <dir> --prompts-version <v>  Benchmark a candidate prompt set
+      --compare          Only print the comparison across logged benchmark runs
 `;
 
 function parseArgs(argv) {
@@ -46,6 +52,17 @@ async function main() {
   const args = parseArgs(process.argv.slice(2));
   const cmd = args._[0];
   if (!cmd || args.help || cmd === "help") return console.log(HELP);
+
+  if (cmd === "bench") {
+    const suite = loadSuite(typeof args.suite === "string" ? args.suite : "benchmarks/strings/suite.yaml");
+    if (!args.compare) {
+      const str = (k) => (typeof args[k] === "string" ? args[k] : undefined);
+      const r = await runBench(suite, { fixtureConfig: str("fixture-config"), promptsDir: str("prompts-dir"), promptsVersion: str("prompts-version"), verbose: Boolean(args.verbose) });
+      console.log(`\n${r.suite} @ ${r.promptVersion}: ${r.passed}/${r.runs} passed, ${r.firstTry} first try, $${r.costUsd.toFixed(3)}\n`);
+    }
+    console.log(formatComparison(compareBench(suite)));
+    return;
+  }
 
   const config = loadConfig(args.config ?? "ungrind.config.yaml");
   const source = () => createSource(config);
