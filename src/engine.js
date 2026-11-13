@@ -6,6 +6,7 @@ import { buildPrompt, parseAgentOutput, readConventions } from "./prompts.js";
 import { runVerifiers } from "./verifiers/index.js";
 import { writeRunLog } from "./runlog.js";
 import { eventFor } from "./notify.js";
+import { agentFor, modelFor, singleRunner } from "./agents/index.js";
 
 const rel = (repo, p) => path.relative(repo, p).split(path.sep).join("/");
 
@@ -28,7 +29,8 @@ function branchName(config, task) {
  * One run = at most one task. The engine (not the model) owns the queue, retry counts,
  * escalation, verification, logging and stop conditions.
  */
-export async function runOnce({ config, source, runner, templates, dryRun = false, onlyId = null, skipConventions = false, log = console.log, notify = null }) {
+export async function runOnce({ config, source, runner = null, runners = null, templates, dryRun = false, onlyId = null, skipConventions = false, log = console.log, notify = null }) {
+  runners ??= singleRunner(runner);
   const started = Date.now();
   const record = {
     ts: new Date().toISOString(), project: config.project, dryRun, promptVersion: templates.version,
@@ -77,7 +79,7 @@ export async function runOnce({ config, source, runner, templates, dryRun = fals
   if (!dryRun) await source.setStatus(task, "in_progress");
   let notes = task.notes || (source.loadNotes ? await source.loadNotes(task) : "");
 
-  const { ladder, failuresPerTier, maxCostUsd, models } = config.routing;
+  const { ladder, failuresPerTier, maxCostUsd } = config.routing;
   let tierIdx = ladder.indexOf(config.routing.tierBySize[task.size] ?? config.routing.defaultTier);
   if (tierIdx < 0) tierIdx = 0;
   record.startTier = ladder[tierIdx];
@@ -92,9 +94,11 @@ export async function runOnce({ config, source, runner, templates, dryRun = fals
     for (let n = 1; n <= config.guardrails.maxAttempts; n++) {
       const tier = ladder[tierIdx];
       const prompt = buildPrompt({ templates, tier, task, config, conventions, notes, failure });
-      log(`[ungrind] attempt ${n}/${config.guardrails.maxAttempts} at ${tier}`);
-      const res = await runner.run({ prompt, cwd: config.repo, tier, model: models[tier], timeoutMs: config.agent.timeoutSec * 1000 });
-      const attempt = { n, tier, model: models[tier], agentExit: res.exitCode, costUsd: res.usage.costUsd, agentMs: res.durationMs, verifiers: [], passed: false };
+      const agent = agentFor(config, task, tier);
+      const model = modelFor(config, agent, tier);
+      log(`[ungrind] attempt ${n}/${config.guardrails.maxAttempts} at ${tier} (${agent}${model ? ` ${model}` : ""})`);
+      const res = await runners.get(agent).run({ prompt, cwd: config.repo, tier, model, timeoutMs: config.agent.timeoutSec * 1000, checks: config.verifiers });
+      const attempt = { n, tier, agent, model, agentExit: res.exitCode, costUsd: res.usage.costUsd, tokens: { input: res.usage.inputTokens ?? 0, output: res.usage.outputTokens ?? 0 }, agentMs: res.durationMs, verifiers: [], passed: false };
       record.attempts.push(attempt);
       record.totalCostUsd += res.usage.costUsd;
 

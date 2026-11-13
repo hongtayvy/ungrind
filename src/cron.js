@@ -69,7 +69,7 @@ export function acquireLock(stateDir, staleMin) {
   return () => { try { fs.unlinkSync(file); } catch {} };
 }
 
-export async function cronRun({ config, source, runner, templates, notify = null, log = console.log, now = () => new Date(), exec }) {
+export async function cronRun({ config, source, runner = null, runners = null, templates, notify = null, log = console.log, now = () => new Date(), exec }) {
   const release = acquireLock(config.prompts.stateDir, config.cron.lockStaleMin);
   if (!release) { log("[ungrind] another run holds the lock, exiting"); return [{ result: "locked" }]; }
   const results = [];
@@ -86,7 +86,7 @@ export async function cronRun({ config, source, runner, templates, notify = null
       }
       let r;
       try {
-        r = await runOnce({ config, source, runner, templates, log, notify });
+        r = await runOnce({ config, source, runner, runners, templates, log, notify });
       } catch (e) {
         r = { ts: now().toISOString(), project: config.project, dryRun: false, task: null, attempts: [], result: "error", reason: e.message, totalCostUsd: 0 };
         writeRunLog(config.prompts.stateDir, r);

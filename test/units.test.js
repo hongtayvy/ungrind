@@ -64,7 +64,7 @@ test("config validation reports every problem", () => {
   assert.match(text, /adapter: must be/);
   assert.match(text, /at least one check/);
   assert.match(text, /\{slug\}/);
-  assert.match(text, /"gpt" has no model/);
+  assert.match(text, /tier "gpt" runs on claude-code but has no model/);
 });
 
 test("config defaults applied", () => {

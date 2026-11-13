@@ -96,7 +96,6 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     models: { ...DEFAULT_MODELS, ...(isObj(r.models) ? r.models : {}) },
   };
   if (!strList(routing.ladder) || routing.ladder.length === 0) err("routing.ladder: must be a non-empty list of tiers");
-  else for (const t of routing.ladder) if (!routing.models[t]) err(`routing.ladder: tier "${t}" has no model in routing.models`);
   for (const [size, t] of Object.entries(routing.tierBySize)) {
     if (!routing.ladder.includes(t)) err(`routing.tierBySize.${size}: "${t}" is not on the ladder`);
   }
@@ -121,10 +120,29 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
   const a = isObj(raw.agent) ? raw.agent : {};
   const agent = {
     adapter: a.adapter ?? "claude-code",
+    byTier: isObj(a.byTier) ? a.byTier : {},
+    byType: isObj(a.byType) ? a.byType : {},
+    codex: isObj(a.codex) ? a.codex : {},
+    ollama: isObj(a.ollama) ? a.ollama : {},
     timeoutSec: a.timeoutSec ?? 1200,
     allowedTools: a.allowedTools ?? ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
     disallowedTools: a.disallowedTools ?? ["Bash(git push:*)", "Bash(git merge:*)", "Bash(git checkout:*)", "Bash(git switch:*)", "Bash(git reset:*)", "Bash(git branch:*)"],
   };
+  const ADAPTERS = ["claude-code", "codex", "ollama"];
+  const used = [agent.adapter, ...Object.values(agent.byTier), ...Object.values(agent.byType)];
+  for (const ad of new Set(used)) if (!ADAPTERS.includes(ad)) err(`agent: unknown adapter "${ad}" (use ${ADAPTERS.join(", ")})`);
+  for (const t of Object.keys(agent.byTier)) if (strList(routing.ladder) && !routing.ladder.includes(t)) err(`agent.byTier.${t}: "${t}" is not on the ladder`);
+  if (strList(routing.ladder)) {
+    for (const t of routing.ladder) {
+      // byType may move a tier to another adapter, so every adapter that can serve this tier needs a model for it.
+      const adapters = new Set(agent.byTier[t] ? [agent.byTier[t]] : [agent.adapter, ...Object.values(agent.byType)]);
+      for (const ad of adapters) {
+        if (ad === "claude-code" && !routing.models[t]) err(`routing.ladder: tier "${t}" runs on claude-code but has no model in routing.models`);
+        if (ad === "ollama" && !agent.ollama.models?.[t]) err(`routing.ladder: tier "${t}" runs on ollama but has no model in agent.ollama.models`);
+      }
+    }
+  }
+
   const p = isObj(raw.prompts) ? raw.prompts : {};
   const stateDir = path.join(repo, p.stateDir ?? ".ungrind");
   const prompts = {

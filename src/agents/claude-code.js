@@ -1,11 +1,10 @@
-import { spawn } from "node:child_process";
+import { spawnAgent, zeroUsage } from "./spawn.js";
 
 /**
- * Agent runner interface:
- *   run({ prompt, cwd, tier, model, timeoutMs, readOnly? })
+ * Agent runner interface (every adapter):
+ *   run({ prompt, cwd, tier, model, timeoutMs, readOnly?, checks? })
  *     -> { output, exitCode, usage: { costUsd, inputTokens, outputTokens }, durationMs, timedOut }
  * Claude Code adapter: headless `claude -p` under the user's existing login.
- * The prompt goes over stdin so it never hits argv limits or shell quoting.
  */
 export class ClaudeCodeRunner {
   constructor(agentConfig, { bin = "claude" } = {}) {
@@ -24,29 +23,12 @@ export class ClaudeCodeRunner {
     return args;
   }
 
-  run({ prompt, cwd, model, timeoutMs, readOnly = false }) {
-    const started = Date.now();
-    return new Promise((resolve) => {
-      const child = spawn(this.bin, this.buildArgs({ model, readOnly }), { cwd, stdio: ["pipe", "pipe", "pipe"] });
-      let stdout = "", stderr = "", timedOut = false;
-      const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
-      child.stdout.on("data", (d) => (stdout += d));
-      child.stderr.on("data", (d) => (stderr += d));
-      child.on("error", (e) => {
-        clearTimeout(timer);
-        resolve({ output: `Could not start "${this.bin}": ${e.message}`, exitCode: 127, usage: zero(), durationMs: Date.now() - started, timedOut: false });
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve({ ...parseResult(stdout, stderr, code), exitCode: timedOut ? 124 : code ?? 1, durationMs: Date.now() - started, timedOut });
-      });
-      child.stdin.on("error", () => {});
-      child.stdin.end(prompt);
-    });
+  async run({ prompt, cwd, model, timeoutMs, readOnly = false }) {
+    const r = await spawnAgent(this.bin, this.buildArgs({ model, readOnly }), { cwd, input: prompt, timeoutMs });
+    if (r.spawnError) return { output: r.spawnError, exitCode: 127, usage: zeroUsage(), durationMs: r.durationMs, timedOut: false };
+    return { ...parseResult(r.stdout, r.stderr, r.code), exitCode: r.code, durationMs: r.durationMs, timedOut: r.timedOut };
   }
 }
-
-const zero = () => ({ costUsd: 0, inputTokens: 0, outputTokens: 0 });
 
 /** `claude -p --output-format json` prints one JSON object; fall back to raw text if it does not. */
 export function parseResult(stdout, stderr, code) {
@@ -63,11 +45,6 @@ export function parseResult(stdout, stderr, code) {
       isError: Boolean(j.is_error),
     };
   } catch {
-    return { output: (stdout + (stderr ? `\n${stderr}` : "")).trim(), usage: zero(), isError: code !== 0 };
+    return { output: (stdout + (stderr ? `\n${stderr}` : "")).trim(), usage: zeroUsage(), isError: code !== 0 };
   }
-}
-
-export function createRunner(agentConfig, deps = {}) {
-  if (agentConfig.adapter === "claude-code") return new ClaudeCodeRunner(agentConfig, deps);
-  throw new Error(`Unknown agent adapter: ${agentConfig.adapter} (v1 ships claude-code only)`);
 }

@@ -13,6 +13,26 @@ export function readRunLog(stateDir) {
   return fs.readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l));
 }
 
+/**
+ * Per attempt, grouped by tier / agent / model: how often each rung passes and what it costs.
+ * This is how a local model compares with the paid tiers (local attempts log $0).
+ */
+export function statsByTier(records) {
+  const out = {};
+  for (const r of records) {
+    if (r.dryRun) continue;
+    for (const a of r.attempts ?? []) {
+      const key = `${a.tier} / ${a.agent ?? "claude-code"}${a.model ? ` / ${a.model}` : ""}`;
+      const o = (out[key] ??= { attempts: 0, passed: 0, costUsd: 0, agentMs: 0 });
+      o.attempts++;
+      if (a.passed) o.passed++;
+      o.costUsd += a.costUsd ?? 0;
+      o.agentMs += a.agentMs ?? 0;
+    }
+  }
+  return out;
+}
+
 /** First-try pass rate per prompt version (the number that tells you whether a prompt change helped). */
 export function passRateByPromptVersion(records) {
   const out = {};

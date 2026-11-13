@@ -2,18 +2,26 @@ import fs from "node:fs";
 import path from "node:path";
 import { fill, readConventions } from "./prompts.js";
 import { renderTaskCard } from "./task.js";
+import { agentFor, modelFor } from "./agents/index.js";
 
 const checksList = (config) => config.verifiers.map((v) => `- ${v.name}: \`${v.command}\``).join("\n");
 const strongest = (config) => config.routing.ladder[config.routing.ladder.length - 1];
 
+/** Run a read-only prompt at the strongest tier, on whichever agent serves that tier. */
+export function runStrongest({ config, runners, prompt }) {
+  const tier = strongest(config);
+  const agent = agentFor(config, null, tier);
+  return runners.get(agent).run({ prompt, cwd: config.repo, tier, model: modelFor(config, agent, tier), timeoutMs: config.agent.timeoutSec * 1000, readOnly: true });
+}
+
 export const draftPath = (config) => path.join(config.prompts.stateDir, "conventions.draft.md");
 
 /** One-time onboarding: the strongest tier reads the repo (read-only) and drafts the conventions file. */
-export async function onboard({ config, runner, templates, log = console.log }) {
+export async function onboard({ config, runners, templates, log = console.log }) {
   const tier = strongest(config);
   log(`[ungrind] onboarding ${config.project} with ${tier} (read-only)...`);
   const prompt = fill(templates.onboard, { checks: checksList(config) });
-  const res = await runner.run({ prompt, cwd: config.repo, tier, model: config.routing.models[tier], timeoutMs: config.agent.timeoutSec * 1000, readOnly: true });
+  const res = await runStrongest({ config, runners, prompt });
   if (res.exitCode !== 0 || !res.output.trim()) throw new Error(`Onboarding run failed (exit ${res.exitCode}):\n${res.output.slice(-2000)}`);
   fs.mkdirSync(config.prompts.stateDir, { recursive: true });
   fs.writeFileSync(draftPath(config), `${res.output.trim()}\n`);
@@ -35,7 +43,7 @@ export function approve({ config, log = console.log }) {
 }
 
 /** Planner: turn a fuzzy card into crisp ones. Prints proposals; never edits tasks itself. */
-export async function plan({ config, runner, templates, task, log = console.log }) {
+export async function plan({ config, runners, templates, task, log = console.log }) {
   const tier = strongest(config);
   const prompt = fill(templates.planner, {
     task: renderTaskCard({ ...task, goal: task.goal || "(none)", criteria: task.criteria.length ? task.criteria : ["(none)"] }),
@@ -44,7 +52,7 @@ export async function plan({ config, runner, templates, task, log = console.log 
     checks: checksList(config),
     notes: task.notes || "(none)",
   });
-  const res = await runner.run({ prompt, cwd: config.repo, tier, model: config.routing.models[tier], timeoutMs: config.agent.timeoutSec * 1000, readOnly: true });
+  const res = await runStrongest({ config, runners, prompt });
   if (res.exitCode !== 0) throw new Error(`Planner run failed (exit ${res.exitCode}):\n${res.output.slice(-2000)}`);
   log(res.output.trim());
   return res.output;

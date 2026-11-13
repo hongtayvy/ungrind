@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 import { loadConfig } from "../src/config.js";
 import { createSource } from "../src/sources/index.js";
-import { createRunner } from "../src/agents/claude-code.js";
+import { createRunners } from "../src/agents/index.js";
 import { loadTemplates } from "../src/prompts.js";
 import { validateTask, readyCandidates } from "../src/task.js";
 import { runOnce } from "../src/engine.js";
 import { onboard, approve, plan } from "../src/onboard.js";
-import { readRunLog, passRateByPromptVersion } from "../src/runlog.js";
+import { readRunLog, passRateByPromptVersion, statsByTier } from "../src/runlog.js";
 import { createNotifier } from "../src/notify.js";
 import { cronRun, crontabLine } from "../src/cron.js";
 import { fileURLToPath } from "node:url";
@@ -49,7 +49,7 @@ async function main() {
 
   const config = loadConfig(args.config ?? "ungrind.config.yaml");
   const source = () => createSource(config);
-  const runner = () => createRunner(config.agent);
+  const runners = () => createRunners(config);
   const templates = () => loadTemplates(config.prompts);
 
   switch (cmd) {
@@ -70,7 +70,7 @@ async function main() {
     }
     case "run": {
       const r = await runOnce({
-        config, source: source(), runner: runner(), templates: templates(),
+        config, source: source(), runners: runners(), templates: templates(),
         dryRun: Boolean(args["dry-run"]), onlyId: typeof args.task === "string" ? args.task : null,
         skipConventions: Boolean(args["skip-conventions"]),
         notify: createNotifier(config),
@@ -83,24 +83,30 @@ async function main() {
         const schedule = typeof args.schedule === "string" ? args.schedule : undefined;
         return console.log(crontabLine(config, { schedule, bin: fileURLToPath(import.meta.url) }));
       }
-      const results = await cronRun({ config, source: source(), runner: runner(), templates: templates(), notify: createNotifier(config) });
+      const results = await cronRun({ config, source: source(), runners: runners(), templates: templates(), notify: createNotifier(config) });
       process.exitCode = results.some((r) => r.result === "blocked" || r.result === "error") ? 2 : 0;
       return;
     }
-    case "onboard": await onboard({ config, runner: runner(), templates: templates() }); return;
+    case "onboard": await onboard({ config, runners: runners(), templates: templates() }); return;
     case "approve": approve({ config }); return;
     case "plan": {
       if (typeof args.task !== "string") throw new Error("plan needs --task <id>");
       const task = (await source().listTasks()).find((t) => t.id === args.task);
       if (!task) throw new Error(`No task with id ${args.task}`);
-      await plan({ config, runner: runner(), templates: templates(), task });
+      await plan({ config, runners: runners(), templates: templates(), task });
       return;
     }
     case "stats": {
-      const rows = passRateByPromptVersion(readRunLog(config.prompts.stateDir));
+      const records = readRunLog(config.prompts.stateDir);
+      const rows = passRateByPromptVersion(records);
       if (!Object.keys(rows).length) return console.log("no runs logged yet");
+      console.log("By prompt version:");
       for (const [v, r] of Object.entries(rows)) {
-        console.log(`${v}: ${r.runs} run(s), ${r.passed} done, first-try pass rate ${((100 * r.firstTryPass) / r.runs).toFixed(0)}%`);
+        console.log(`  ${v}: ${r.runs} run(s), ${r.passed} done, first-try pass rate ${((100 * r.firstTryPass) / r.runs).toFixed(0)}%`);
+      }
+      console.log("By tier / agent / model (per attempt):");
+      for (const [k, s] of Object.entries(statsByTier(records))) {
+        console.log(`  ${k}: ${s.attempts} attempt(s), ${((100 * s.passed) / s.attempts).toFixed(0)}% passed, $${s.costUsd.toFixed(2)} total, avg ${(s.agentMs / s.attempts / 1000).toFixed(0)}s`);
       }
       return;
     }
