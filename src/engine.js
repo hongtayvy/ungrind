@@ -1,4 +1,5 @@
 import path from "node:path";
+import crypto from "node:crypto";
 import { git, currentBranch, changedFiles, commitAll, hasRemote } from "./git.js";
 import { nextReady } from "./sources/index.js";
 import { slugify } from "./task.js";
@@ -50,6 +51,8 @@ export async function runOnce({ config, source, runner = null, runners = null, t
 
   const excludes = engineExcludes(config);
   const conventions = readConventions(config.prompts);
+  // Accepted proposals change conventions, not templates; track both so stats compare like with like.
+  record.conventionsVersion = conventions ? crypto.createHash("sha256").update(conventions).digest("hex").slice(0, 8) : "none";
   if (!conventions && config.prompts.requireConventions && !skipConventions) {
     if (!dryRun) {
       throw new Error("No approved conventions file. Run `ungrind onboard`, review the draft, then `ungrind approve` (or pass --skip-conventions).");

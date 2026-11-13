@@ -38,7 +38,8 @@ export function passRateByPromptVersion(records) {
   const out = {};
   for (const r of records) {
     if (r.dryRun || !r.promptVersion || r.result === "nothing-ready") continue;
-    const o = (out[r.promptVersion] ??= { runs: 0, firstTryPass: 0, passed: 0 });
+    const key = r.conventionsVersion ? `${r.promptVersion} conv:${r.conventionsVersion}` : r.promptVersion;
+    const o = (out[key] ??= { runs: 0, firstTryPass: 0, passed: 0 });
     o.runs++;
     if (r.result === "done") o.passed++;
     if (r.result === "done" && r.attempts.length === 1) o.firstTryPass++;

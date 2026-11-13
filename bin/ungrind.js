@@ -11,6 +11,7 @@ import { createNotifier } from "../src/notify.js";
 import { cronRun, crontabLine } from "../src/cron.js";
 import { fileURLToPath } from "node:url";
 import { loadSuite, runBench, compareBench, formatComparison } from "../src/bench.js";
+import { propose, listProposals, accept, reject } from "../src/proposals.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -29,6 +30,10 @@ Commands:
   approve              Promote the reviewed draft to .ungrind/conventions.md
   plan --task <id>     Planner proposes a crisper card for a task (prints only)
   stats                Pass rates per prompt version and per tier / agent / model from the run log
+  propose [--min-failures n]  Draft one conventions improvement from repeated failures in the run log
+  proposals            List proposals and their status
+  accept <id>          Human approval: append the proposal's addition to the conventions file
+  reject <id>          Mark a proposal rejected
   bench                Run the benchmark suite in throwaway copies of its fixture (no --config needed)
       --suite <file>     Suite file (default benchmarks/strings/suite.yaml)
       --fixture-config <name>  Config inside the fixture, e.g. ungrind.local.yaml
@@ -102,6 +107,24 @@ async function main() {
       }
       const results = await cronRun({ config, source: source(), runners: runners(), templates: templates(), notify: createNotifier(config) });
       process.exitCode = results.some((r) => r.result === "blocked" || r.result === "error") ? 2 : 0;
+      return;
+    }
+    case "propose": {
+      const minFailures = typeof args["min-failures"] === "string" ? Number(args["min-failures"]) : 3;
+      await propose({ config, runners: runners(), templates: templates(), minFailures });
+      return;
+    }
+    case "proposals": {
+      const list = listProposals(config);
+      if (!list.length) return console.log("no proposals yet");
+      for (const p of list) console.log(`${p.id}  ${p.status.padEnd(8)}  ${p.problem}`);
+      return;
+    }
+    case "accept":
+    case "reject": {
+      const id = args._[1];
+      if (!id) throw new Error(`${cmd} needs a proposal id (see \`ungrind proposals\`)`);
+      (cmd === "accept" ? accept : reject)({ config, id });
       return;
     }
     case "onboard": await onboard({ config, runners: runners(), templates: templates() }); return;
