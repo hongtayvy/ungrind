@@ -1,0 +1,13 @@
+{
+  "name": "ungrind",
+  "version": "0.1.0",
+  "description": "Ship your side projects without the grind. A reusable, project-agnostic loop engine for coding agents.",
+  "type": "module",
+  "bin": { "ungrind": "bin/ungrind.js" },
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "ungrind": "node bin/ungrind.js"
+  },
+  "license": "MIT"
+}
