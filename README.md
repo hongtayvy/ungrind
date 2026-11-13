@@ -6,6 +6,8 @@ Ungrind is a project-agnostic loop engine for coding agents. It pulls one task f
 
 Zero dependencies. Node 20+ and the `claude` CLI (logged in) are all you need.
 
+The full design and scope (V1, V2, Someday) is in [docs/design.md](docs/design.md).
+
 ## Try the demo (2 minutes)
 
 ```bash
