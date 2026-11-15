@@ -86,7 +86,8 @@ struct ProjectSidebar: View {
                 Label("Add folder…", systemImage: "plus").frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 16).padding(.vertical, 12)
+            .padding(.horizontal, 16)
+            .frame(height: Theme.footerHeight)
             .help("Add a project folder (⌘O)")
         }
         .background(Theme.sidebar.ignoresSafeArea())
@@ -291,7 +292,8 @@ struct CardList: View {
             Divider()
             Text(footer).font(.system(size: 11)).foregroundStyle(Theme.muted)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 14).padding(.vertical, 9)
+                .padding(.horizontal, 14)
+                .frame(height: Theme.footerHeight)
         }
     }
 

@@ -27,6 +27,9 @@ extension NSColor {
 }
 
 enum Theme {
+    /// The sidebar and card column footers share one height so their top lines meet.
+    static let footerHeight: CGFloat = 40
+
     // Surfaces
     static let detail = Color(light: 0xFDFDFB, dark: 0x292F2A)
     static let list = Color(light: 0xF8F8F5, dark: 0x252B26)
