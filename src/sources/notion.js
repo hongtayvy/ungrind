@@ -12,6 +12,9 @@ const DEFAULT_PROPS = {
   size: "Size",
   type: "Type",
   approved: "Approved",
+  tier: "Tier",
+  agent: "Agent",
+  archived: "Archived",
 };
 
 /**
@@ -78,6 +81,9 @@ export class NotionSource {
       size: get("size")?.select?.name ?? (text(get("size")) || null),
       type: get("type")?.select?.name ?? (text(get("type")) || null),
       approved: get("approved")?.checkbox === true,
+      tier: get("tier")?.select?.name ?? null,
+      agent: get("agent")?.select?.name ?? null,
+      archived: get("archived")?.checkbox === true,
       notes: "",
       summary: "",
       _statusKind: statusProp?.status ? "status" : "select",

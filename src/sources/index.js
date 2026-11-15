@@ -22,13 +22,13 @@ export function createSource(config, deps = {}) {
  * Returns { task, skipped[] }. Tasks that fail contract validation are reported in `skipped`
  * and (unless dryRun) marked blocked with a reason, instead of being guessed at.
  */
-export async function nextReady(source, { dryRun = false, onlyId = null } = {}) {
+export async function nextReady(source, { dryRun = false, onlyId = null, extraProblems = null } = {}) {
   const all = await source.listTasks();
   const skipped = [];
   let candidates = readyCandidates(all);
   if (onlyId) candidates = candidates.filter((t) => t.id === onlyId);
   for (const task of candidates) {
-    const problems = validateTask(task);
+    const problems = [...validateTask(task), ...(extraProblems ? extraProblems(task) : [])];
     if (problems.length === 0) return { task, skipped, all };
     const reason = `Failed task contract: ${problems.join("; ")}`;
     skipped.push({ id: task.id, reason });

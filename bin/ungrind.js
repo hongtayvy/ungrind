@@ -13,6 +13,8 @@ import { fileURLToPath } from "node:url";
 import { loadSuite, runBench, compareBench, formatComparison } from "../src/bench.js";
 import { propose, listProposals, accept, reject } from "../src/proposals.js";
 import { serveBoard, writeBoard } from "../src/board.js";
+import { buildProjectState, saveCard, initProject, findConfig } from "../src/app.js";
+import fs from "node:fs";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -37,6 +39,9 @@ Commands:
   reject <id>          Mark a proposal rejected
   board [--port 4477]  Read-only board of tasks and recent runs on http://127.0.0.1 (localhost only)
       --out <file>       Write a static HTML snapshot instead of serving
+  init --dir <folder>  Write a starter config and tasks folder (never overwrites); prints JSON
+  state                Print project rules, feature cards, and recent runs as JSON (for front ends)
+  card-save            Create or update a card from JSON on stdin (local files); prints JSON
   bench                Run the benchmark suite in throwaway copies of its fixture (no --config needed)
       --suite <file>     Suite file (default benchmarks/strings/suite.yaml)
       --fixture-config <name>  Config inside the fixture, e.g. ungrind.local.yaml
@@ -70,6 +75,13 @@ async function main() {
     }
     console.log(formatComparison(compareBench(suite)));
     return;
+  }
+
+  if (cmd === "init") {
+    return console.log(JSON.stringify(initProject(typeof args.dir === "string" ? args.dir : ".")));
+  }
+  if (cmd === "find-config") {
+    return console.log(JSON.stringify({ configFile: findConfig(typeof args.dir === "string" ? args.dir : ".") }));
   }
 
   const config = loadConfig(args.config ?? "ungrind.config.yaml");
@@ -130,6 +142,10 @@ async function main() {
       (cmd === "accept" ? accept : reject)({ config, id });
       return;
     }
+    case "state":
+      return console.log(JSON.stringify(await buildProjectState(config, source())));
+    case "card-save":
+      return console.log(JSON.stringify(saveCard(config, JSON.parse(fs.readFileSync(0, "utf8")))));
     case "board": {
       if (typeof args.out === "string") return console.log(`board written to ${await writeBoard(config, source(), args.out)}`);
       const port = typeof args.port === "string" ? Number(args.port) : 4477;

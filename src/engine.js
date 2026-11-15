@@ -7,7 +7,7 @@ import { buildPrompt, parseAgentOutput, readConventions } from "./prompts.js";
 import { runVerifiers } from "./verifiers/index.js";
 import { writeRunLog } from "./runlog.js";
 import { eventFor } from "./notify.js";
-import { agentFor, modelFor, singleRunner } from "./agents/index.js";
+import { agentFor, modelFor, singleRunner, startTier, routeProblems } from "./agents/index.js";
 import { reviewChange } from "./review.js";
 
 const rel = (repo, p) => path.relative(repo, p).split(path.sep).join("/");
@@ -66,7 +66,7 @@ export async function runOnce({ config, source, runner = null, runners = null, t
   if (dirty.length) throw new Error(`Working tree is not clean (${dirty.slice(0, 5).join(", ")}${dirty.length > 5 ? ", ..." : ""}). Commit or stash first so the diff guard sees only agent changes.`);
 
   // Queue: validate against the contract, block bad cards, pick the best ready task.
-  const { task, skipped } = await nextReady(source, { dryRun, onlyId });
+  const { task, skipped } = await nextReady(source, { dryRun, onlyId, extraProblems: (t) => routeProblems(config, t) });
   for (const s of skipped) log(`[ungrind] ${dryRun ? "would block" : "blocked"} ${s.id}: ${s.reason}`);
   record.skipped = skipped;
   if (!task) { log("[ungrind] nothing ready"); return finish("nothing-ready"); }
@@ -84,8 +84,7 @@ export async function runOnce({ config, source, runner = null, runners = null, t
   let notes = task.notes || (source.loadNotes ? await source.loadNotes(task) : "");
 
   const { ladder, failuresPerTier, maxCostUsd } = config.routing;
-  let tierIdx = ladder.indexOf(config.routing.tierBySize[task.size] ?? config.routing.defaultTier);
-  if (tierIdx < 0) tierIdx = 0;
+  let tierIdx = ladder.indexOf(startTier(config, task));
   record.startTier = ladder[tierIdx];
 
   const branch = branchName(config, task);

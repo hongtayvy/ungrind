@@ -47,7 +47,7 @@ export function renderTaskCard(task) {
 export function readyCandidates(tasks) {
   const doneIds = new Set(tasks.filter((t) => t.status === "done").map((t) => t.id));
   return tasks
-    .filter((t) => t.status === "ready" && t.dependencies.every((d) => doneIds.has(d)))
+    .filter((t) => t.status === "ready" && !t.archived && t.dependencies.every((d) => doneIds.has(d)))
     .sort((a, b) => rank(a) - rank(b) || String(a.id).localeCompare(String(b.id)));
 }
 
