@@ -132,6 +132,15 @@ public final class EngineClient: @unchecked Sendable {
         try await json(DiscoverResult.self, ["discover", "--config", config, "--max", String(max)])
     }
 
+    public func rules(config: String) async throws -> RulesPayload {
+        try await json(RulesPayload.self, ["rules", "--config", config])
+    }
+
+    /// Saves edited rules. The engine validates first and writes nothing if they are invalid.
+    public func saveRules(_ draft: RulesDraft, config: String) async throws -> RulesSaveResult {
+        try await json(RulesSaveResult.self, ["rules-save", "--config", config], stdin: JSONEncoder().encode(draft))
+    }
+
     public func save(_ draft: CardDraft, config: String) async throws -> SaveResult {
         try await json(SaveResult.self, ["card-save", "--config", config], stdin: JSONEncoder().encode(draft))
     }

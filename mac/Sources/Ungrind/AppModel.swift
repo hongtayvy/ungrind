@@ -60,6 +60,8 @@ final class AppModel {
     var alert: String?
     var engineProblem: String?
     var confirmShipWithoutConventions: Card?
+    /// The rules being edited, loaded fresh from the folder each time the editor opens.
+    var editingRules: RulesPayload?
     var notice: String?
     /// Folder paths with a first pass in flight.
     var discovering: Set<String> = []
@@ -202,6 +204,28 @@ final class AppModel {
             } catch {
                 alert = error.localizedDescription
             }
+        }
+    }
+
+    // MARK: Rules
+
+    func editRules() {
+        guard let config = selectedConfig, let client else { return }
+        Task {
+            do { editingRules = try await client.rules(config: config) }
+            catch { alert = error.localizedDescription }
+        }
+    }
+
+    /// Returns nil on success, or the engine's explanation of what is wrong. Nothing is written on failure.
+    func saveRules(_ draft: RulesDraft) async -> String? {
+        guard let path = selectedPath, let config = selectedConfig, let client else { return "No project is selected." }
+        do {
+            _ = try await client.saveRules(draft, config: config)
+            await reload(path)
+            return nil
+        } catch {
+            return error.localizedDescription
         }
     }
 

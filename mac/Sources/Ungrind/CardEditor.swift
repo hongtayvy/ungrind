@@ -125,7 +125,7 @@ struct CardEditor: View {
             .padding(.horizontal, 22).padding(.vertical, 14)
         }
         .frame(width: 560)
-        .frame(minHeight: 480, idealHeight: 600, maxHeight: 680)
+        .frame(minHeight: 420, idealHeight: 540, maxHeight: 540)
         .background(Theme.detail)
         .interactiveDismissDisabled(saving)
         .onAppear {

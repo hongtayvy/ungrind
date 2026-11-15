@@ -201,4 +201,66 @@ public struct DiscoverResult: Codable, Equatable {
         return text
     }
 }
+/// The project rules as the editor sees them (`ungrind rules` / `ungrind rules-save`).
+public struct RulesDraft: Codable, Equatable {
+    public struct Check: Codable, Equatable {
+        public var name: String
+        public var command: String
+        public var timeoutSec: Double
+        public init(name: String = "", command: String = "", timeoutSec: Double = 300) { self.name = name; self.command = command; self.timeoutSec = timeoutSec }
+    }
+    public struct Sizes: Codable, Equatable { public var small: String; public var medium: String; public var large: String }
+    public struct Review: Codable, Equatable { public var enabled: Bool; public var agent: String; public var blocking: Bool }
+
+    public var verifiers: [Check]
+    public var forbiddenPaths: [String]
+    public var branchPattern: String
+    public var maxAttempts: Int
+    public var maxChangedFiles: Int
+    public var push: Bool
+    public var ladder: [String]
+    public var tierBySize: Sizes
+    public var defaultTier: String
+    public var failuresPerTier: Int
+    public var maxCostUsd: Double
+    public var agentDefault: String
+    public var localModel: String?
+    public var humanApprovalTypes: [String]
+    public var review: Review
+
+    /// Turn a tier on or off, keeping the ladder in cheapest-first order and never leaving
+    /// a size or the default pointing at a tier that is no longer on the ladder.
+    public mutating func setTier(_ tier: String, enabled: Bool, order: [String]) {
+        var set = ladder.filter { $0 != tier }
+        if enabled { set.append(tier) }
+        let rank = { (t: String) in order.firstIndex(of: t) ?? order.count }
+        ladder = set.enumerated().sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }.map(\.element)
+        let now = ladder
+        guard let fallback = now.first else { return }
+        let fix = { (t: String) in now.contains(t) ? t : fallback }
+        tierBySize = Sizes(small: fix(tierBySize.small), medium: fix(tierBySize.medium), large: fix(tierBySize.large))
+        defaultTier = fix(defaultTier)
+    }
+
+    /// Problems the editor can point at before asking the engine (which validates again on save).
+    public var problems: [String] {
+        var out: [String] = []
+        if verifiers.isEmpty { out.append("Add at least one check. Without one, a run has nothing to prove it worked.") }
+        if verifiers.contains(where: { $0.name.trimmingCharacters(in: .whitespaces).isEmpty || $0.command.trimmingCharacters(in: .whitespaces).isEmpty }) { out.append("Every check needs a name and a command.") }
+        if ladder.isEmpty { out.append("Keep at least one tier on the route.") }
+        if ladder.contains("local") && (localModel ?? "").isEmpty { out.append("Choose a local model for the local tier.") }
+        if !branchPattern.contains("{slug}") { out.append("The branch name must contain {slug}.") }
+        return out
+    }
+}
+
+public struct RulesPayload: Codable, Equatable {
+    public var rules: RulesDraft
+    public var defaults: RulesDraft?
+    public var installedLocalModels: [String]
+    public var knownTiers: [String]
+    public var agents: [String]
+}
+public struct RulesSaveResult: Codable { public var saved: Bool; public var backup: String }
+
 public struct FindConfigResult: Codable { public var configFile: String? }

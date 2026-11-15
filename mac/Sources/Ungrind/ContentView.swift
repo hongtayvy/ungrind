@@ -20,6 +20,9 @@ struct ContentView: View {
         .sheet(item: $model.editing) { draft in
             CardEditor(draft: draft)
         }
+        .sheet(item: $model.editingRules) { payload in
+            RulesEditor(payload: payload)
+        }
         .alert("Something went wrong", isPresented: Binding(get: { model.alert != nil }, set: { if !$0 { model.alert = nil } })) {
             Button("OK") { model.alert = nil }
         } message: {
@@ -46,6 +49,7 @@ struct ContentView: View {
 }
 
 extension CardDraft: Identifiable {}
+extension RulesPayload: Identifiable { public var id: String { "rules" } }
 
 // MARK: - Left: project folders
 

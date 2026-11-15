@@ -34,6 +34,9 @@ struct UngrindApp: App {
                     .disabled(model.selectedState == nil)
                 Button("Add Folder…") { model.addFolder() }
                     .keyboardShortcut("o")
+                Button("Edit Rules…") { model.editRules() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(model.selectedState == nil || model.isRunning)
                 Button("Reload") { model.reloadSelected() }
                     .keyboardShortcut("r")
             }

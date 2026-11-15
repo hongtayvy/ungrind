@@ -293,8 +293,13 @@ struct RulesDisclosure: View {
                 }
                 .foregroundStyle(Theme.ink)
                 .textSelection(.enabled)
-                Button("Open Rules File") { model.open(state.configFile) }
-                    .help("Opens ungrind.config.yaml in your editor. The app re-reads it when you come back.")
+                HStack(spacing: 8) {
+                    Button("Edit Rules…") { model.editRules() }
+                        .disabled(model.isRunning)
+                        .help(model.isRunning ? "Rules can't change while a run is in progress" : "Edit this project's checks, limits, and route")
+                    Button("Open Rules File") { model.open(state.configFile) }
+                        .help("Opens ungrind.config.yaml in your editor. The app re-reads it when you come back.")
+                }
             }
             .padding(.top, 8).padding(.bottom, 4)
         } label: {

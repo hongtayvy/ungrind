@@ -50,6 +50,25 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(DiscoverResult(created: [], skipped: [], costUsd: 0).summary, "The first pass found nothing new to add.")
     }
 
+    func testRulesDraftTiersAndProblems() {
+        var r = RulesDraft(verifiers: [.init(name: "tests", command: "npm test")], forbiddenPaths: [], branchPattern: "loop/{slug}", maxAttempts: 6, maxChangedFiles: 15, push: true,
+                           ladder: ["haiku", "sonnet", "opus"], tierBySize: .init(small: "haiku", medium: "sonnet", large: "opus"), defaultTier: "sonnet", failuresPerTier: 2, maxCostUsd: 5,
+                           agentDefault: "claude-code", localModel: nil, humanApprovalTypes: [], review: .init(enabled: false, agent: "codex", blocking: true))
+        let order = ["local", "haiku", "sonnet", "opus"]
+        XCTAssertEqual(r.problems, [])
+        r.setTier("local", enabled: true, order: order)
+        XCTAssertEqual(r.ladder, ["local", "haiku", "sonnet", "opus"])
+        XCTAssertEqual(r.problems, ["Choose a local model for the local tier."])
+        r.localModel = "qwen:latest"
+        r.setTier("sonnet", enabled: false, order: order)
+        XCTAssertEqual(r.ladder, ["local", "haiku", "opus"])
+        XCTAssertEqual(r.tierBySize, .init(small: "haiku", medium: "local", large: "opus"))
+        XCTAssertEqual(r.defaultTier, "local")
+        r.verifiers = []
+        r.branchPattern = "loop"
+        XCTAssertEqual(r.problems.count, 2)
+    }
+
     func testShellProbeParsing() {
         let noisy = "[oh-my-zsh] update?\n__UG_NODE__/opt/homebrew/bin/node__UG_PATH__/opt/homebrew/bin:/usr/bin__UG_END__"
         let p = EngineEnvironment.parseShellProbe(noisy)
@@ -110,6 +129,31 @@ final class EngineIntegrationTests: XCTestCase {
         } catch let e as EngineError {
             XCTAssertTrue(e.message.contains("Config not found"), e.message)
         }
+    }
+
+    func testRulesRoundTripThroughEngine() async throws {
+        let client = EngineClient(env: try EngineEnvironment.discover())
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ungrind-mac-rules-\(UUID().uuidString)").path
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let config = try await client.initProject(dir: dir).configFile
+
+        var payload = try await client.rules(config: config)
+        XCTAssertEqual(payload.rules.ladder, ["haiku", "sonnet", "opus"])
+        XCTAssertEqual(payload.knownTiers, ["local", "haiku", "sonnet", "opus"])
+        payload.rules.maxAttempts = 3
+        payload.rules.verifiers = [.init(name: "tests", command: "npm test", timeoutSec: 90)]
+        payload.rules.forbiddenPaths = ["infra/**"]
+        let saved = try await client.saveRules(payload.rules, config: config)
+        XCTAssertTrue(saved.saved)
+        let state = try await client.state(config: config)
+        XCTAssertEqual(state.rules.maxAttempts, 3)
+        XCTAssertEqual(state.rules.verifiers, [.init(name: "tests", command: "npm test")])
+        XCTAssertEqual(state.rules.forbiddenPaths, ["infra/**"])
+
+        payload.rules.verifiers = []
+        do { _ = try await client.saveRules(payload.rules, config: config); XCTFail("expected an error") }
+        catch let e as EngineError { XCTAssertTrue(e.message.contains("nothing was saved"), e.message) }
     }
 
     func testStreamDeliversLinesAndExitCode() async throws {
