@@ -170,7 +170,7 @@ final class EngineIntegrationTests: XCTestCase {
     func testDoctorThroughEngine() async throws {
         let client = EngineClient(env: try EngineEnvironment.discover())
         let tools = try await client.doctor(config: nil)
-        XCTAssertTrue(tools.checks.contains { $0.id == "node" && $0.status == "ok" })
+        XCTAssertTrue(tools.checks.contains { $0.id == "node" && ($0.status == "ok" || $0.status == "warn") }) // warn = works, but is behind security releases
         XCTAssertNil(tools.conventions)
         XCTAssertTrue(tools.checks(in: "project").isEmpty)
 
