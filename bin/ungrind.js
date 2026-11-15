@@ -17,6 +17,7 @@ import { buildProjectState, saveCard, initProject, findConfig } from "../src/app
 import fs from "node:fs";
 import { discover } from "../src/discover.js";
 import { getRules, saveRules } from "../src/rules.js";
+import { doctor } from "../src/doctor.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -43,6 +44,7 @@ Commands:
       --out <file>       Write a static HTML snapshot instead of serving
   init --dir <folder>  Write a starter config and tasks folder (never overwrites); prints JSON
   discover [--max n]   First pass: the strongest tier reads the repo and drafts feature cards; prints JSON
+  doctor [--config f]  Setup check for this Mac and, with --config, the project; prints JSON
   rules                Print the editable rules, Ungrind defaults, and installed local models as JSON
   rules-save           Save edited rules from JSON on stdin (validated first; keeps a backup)
   state                Print project rules, feature cards, and recent runs as JSON (for front ends)
@@ -82,6 +84,11 @@ async function main() {
     return;
   }
 
+  if (cmd === "doctor") {
+    let cfg = null, configError = null;
+    if (typeof args.config === "string") { try { cfg = loadConfig(args.config); } catch (e) { configError = e.message; } }
+    return console.log(JSON.stringify(await doctor({ config: cfg, configError })));
+  }
   if (cmd === "init") {
     return console.log(JSON.stringify(initProject(typeof args.dir === "string" ? args.dir : ".")));
   }
