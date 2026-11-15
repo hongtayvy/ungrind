@@ -80,6 +80,7 @@ public struct Card: Codable, Identifiable, Equatable, Hashable {
     public var agent: String?
     public var approved: Bool
     public var archived: Bool
+    public var draft: Bool
     public var problems: [String]
     public var waiting: Bool
     public var needsApproval: Bool
@@ -95,6 +96,7 @@ public struct Card: Codable, Identifiable, Equatable, Hashable {
     }
 
     public var statusLabel: String {
+        if draft && status != "done" { return "Draft" }
         switch status {
         case "ready": return waiting ? "Waiting" : "Ready"
         case "in_progress": return "In progress"
@@ -106,11 +108,12 @@ public struct Card: Codable, Identifiable, Equatable, Hashable {
 
     /// A card can be shipped when it is ready, passes the contract, and nothing gates it.
     public var canShip: Bool {
-        status == "ready" && !archived && !waiting && problems.isEmpty && !needsApproval
+        status == "ready" && !archived && !draft && !waiting && problems.isEmpty && !needsApproval
     }
 
     public var shipBlocker: String? {
         if archived { return "Archived cards don't run." }
+        if draft { return "Draft from the first pass. Review it, then mark it ready." }
         if !problems.isEmpty { return "Fix the card first: \(problems.joined(separator: "; "))." }
         if status == "done" { return "Already shipped." }
         if status == "in_progress" { return "A run is already in progress for this card." }
@@ -154,6 +157,7 @@ public struct CardDraft: Codable, Equatable {
     public var dependencies: [String] = []
     public var approved = false
     public var archived = false
+    public var draft = false
 
     public init() {}
 
@@ -161,7 +165,7 @@ public struct CardDraft: Codable, Equatable {
         id = card.id; title = card.title; goal = card.goal; criteria = card.criteria; files = card.files
         status = card.status.hasPrefix("unknown") ? "ready" : card.status
         priority = card.priority ?? 1; size = card.size; type = card.type; tier = card.tier; agent = card.agent
-        dependencies = card.dependencies; approved = card.approved; archived = card.archived
+        dependencies = card.dependencies; approved = card.approved; archived = card.archived; draft = card.draft
     }
 
     /// The same checks the engine's task contract makes, so the editor can warn before saving.
@@ -177,4 +181,24 @@ public struct CardDraft: Codable, Equatable {
 
 public struct SaveResult: Codable { public var id: String; public var file: String }
 public struct InitResult: Codable { public var configFile: String; public var created: Bool }
+/// What `ungrind discover` (the first pass) reports back.
+public struct DiscoverResult: Codable, Equatable {
+    public struct Created: Codable, Equatable { public var id: String; public var title: String; public var state: String }
+    public struct Skipped: Codable, Equatable { public var title: String; public var reason: String }
+    public var created: [Created]
+    public var skipped: [Skipped]
+    public var costUsd: Double
+
+    public var summary: String {
+        let shipped = created.filter { $0.state == "shipped" }.count
+        let drafts = created.count - shipped
+        if created.isEmpty { return "The first pass found nothing new to add." }
+        var parts: [String] = []
+        if shipped > 0 { parts.append("\(shipped) already shipped") }
+        if drafts > 0 { parts.append("\(drafts) draft\(drafts == 1 ? "" : "s") to review") }
+        var text = "Added \(created.count) card\(created.count == 1 ? "" : "s"): \(parts.joined(separator: ", "))."
+        if !skipped.isEmpty { text += " Skipped \(skipped.count)." }
+        return text
+    }
+}
 public struct FindConfigResult: Codable { public var configFile: String? }

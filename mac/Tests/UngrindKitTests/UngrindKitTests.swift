@@ -2,9 +2,9 @@ import XCTest
 @testable import UngrindKit
 
 final class ModelTests: XCTestCase {
-    func card(_ id: String, status: String = "ready", archived: Bool = false, priority: Double? = 1, problems: [String] = [], waiting: Bool = false, needsApproval: Bool = false) -> Card {
+    func card(_ id: String, status: String = "ready", archived: Bool = false, priority: Double? = 1, problems: [String] = [], waiting: Bool = false, needsApproval: Bool = false, draft: Bool = false) -> Card {
         Card(id: id, title: id, goal: "g", criteria: ["c"], files: ["a"], status: status, priority: priority, dependencies: ["dep"], size: nil, type: nil, tier: nil, agent: nil,
-             approved: false, archived: archived, problems: problems, waiting: waiting, needsApproval: needsApproval, notes: "", summary: "", file: nil,
+             approved: false, archived: archived, draft: draft, problems: problems, waiting: waiting, needsApproval: needsApproval, notes: "", summary: "", file: nil,
              route: Route(startTier: "haiku", agent: "claude-code", model: "m", overridden: false))
     }
 
@@ -26,6 +26,10 @@ final class ModelTests: XCTestCase {
         XCTAssertFalse(card("a", needsApproval: true).canShip)
         XCTAssertFalse(card("a", archived: true).canShip)
         XCTAssertEqual(card("a", waiting: true).statusLabel, "Waiting")
+        XCTAssertFalse(card("a", draft: true).canShip)
+        XCTAssertEqual(card("a", draft: true).statusLabel, "Draft")
+        XCTAssertEqual(card("a", status: "done", draft: true).statusLabel, "Shipped")
+        XCTAssertEqual(card("a", draft: true).tab, .active)
     }
 
     func testDraftContract() {
@@ -37,6 +41,13 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(from.status, "ready")
         XCTAssertEqual(from.priority, 1)
         XCTAssertEqual(from.id, "x")
+    }
+
+    func testDiscoverSummary() throws {
+        let json = #"{"created":[{"id":"a","title":"A","state":"shipped"},{"id":"b","title":"B","state":"proposed"},{"id":"c","title":"C","state":"proposed"}],"skipped":[{"title":"D","reason":"dup"}],"costUsd":0.2,"durationMs":5}"#
+        let r = try JSONDecoder().decode(DiscoverResult.self, from: Data(json.utf8))
+        XCTAssertEqual(r.summary, "Added 3 cards: 1 already shipped, 2 drafts to review. Skipped 1.")
+        XCTAssertEqual(DiscoverResult(created: [], skipped: [], costUsd: 0).summary, "The first pass found nothing new to add.")
     }
 
     func testShellProbeParsing() {

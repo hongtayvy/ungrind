@@ -28,6 +28,7 @@ swift test
 |---|---|
 | Add a folder | `ungrind find-config --dir <folder>` |
 | Set Up Ungrind Here | `ungrind init --dir <folder>` (writes `ungrind.config.yaml` and `tasks/`; never overwrites) |
+| Read This Folder (first pass) | `ungrind discover --config <file>` (read-only run on the strongest tier) |
 | Load or reload | `ungrind state --config <file>` (rules, cards with route and problems, runs) |
 | Create or edit a card, route override, archive | `ungrind card-save --config <file>` with JSON on stdin |
 | Ship / Dry Run | `ungrind run --config <file> --task <id> [--dry-run]`, log streamed line by line |
@@ -36,6 +37,7 @@ Node is found by asking your login shell (`$SHELL -ilc`), because apps launched 
 
 ## What works today
 
+- **First pass:** "Read This Folder" has your strongest model read the repo and write feature cards. Features that already exist land in Shipped; unfinished work it finds evidence for (TODOs, known bugs, things the README promises) lands in Active as drafts. A draft can't run until you click Mark Ready.
 - **Three columns:** folders, the folder's feature cards (Active / Shipped / Archived), and the selected card's goal, scope, route, rules, and last run.
 - **Cards:** create and edit in the app. Cards are the same markdown files the CLI uses, so edits in your editor show up when you return to the app.
 - **Route overrides per card:** start tier and agent ("run local first", "straight to Codex"). Bad overrides show as card problems and block the run.
@@ -45,7 +47,6 @@ Node is found by asking your login shell (`$SHELL -ilc`), because apps launched 
 
 ## Not built yet (from the plan)
 
-- **First-pass feature parsing:** reading an existing repo and drafting its feature cards. Setup currently creates an empty `tasks/` folder.
 - **Editing rules in the app:** rules are read-only in the app; edit the file.
 - **Shipped on push, Archived after merge:** today Shipped means the engine marked the card Done (checks passed, branch pushed when a remote exists). Archive is a manual action.
 - **Compacting card history.**

@@ -127,6 +127,11 @@ public final class EngineClient: @unchecked Sendable {
         try await json(ProjectState.self, ["state", "--config", config])
     }
 
+    /// First pass: the strongest tier reads the repo and drafts cards. Can take a few minutes.
+    public func discover(config: String, max: Int = 12) async throws -> DiscoverResult {
+        try await json(DiscoverResult.self, ["discover", "--config", config, "--max", String(max)])
+    }
+
     public func save(_ draft: CardDraft, config: String) async throws -> SaveResult {
         try await json(SaveResult.self, ["card-save", "--config", config], stdin: JSONEncoder().encode(draft))
     }

@@ -12,6 +12,7 @@ struct DetailColumn: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         CardHeader(card: card)
+                        if card.draft && card.status != "done" { DraftBox(card: card) }
                         if !card.problems.isEmpty { ProblemsBox(problems: card.problems) }
                         CardBody(card: card)
                         RouteSection(card: card, rules: state.rules)
@@ -61,6 +62,25 @@ struct CardHeader: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
         }
+    }
+}
+
+struct DraftBox: View {
+    @Environment(AppModel.self) private var model
+    let card: Card
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Draft from the first pass", systemImage: "sparkles").font(.headline)
+                Text("Check the goal, criteria, and scope. It won't run until you mark it ready.").foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button("Mark Ready") { model.update(card) { $0.draft = false } }
+                .disabled(!card.problems.isEmpty)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
     }
 }
 

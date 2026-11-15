@@ -44,6 +44,9 @@ final class AppModel {
     var alert: String?
     var engineProblem: String?
     var confirmShipWithoutConventions: Card?
+    var notice: String?
+    /// Folder paths with a first pass in flight.
+    var discovering: Set<String> = []
 
     private var client: EngineClient?
     private var handle: RunHandle?
@@ -132,6 +135,27 @@ final class AppModel {
         Task {
             do { _ = try await client.initProject(dir: path); await reload(path) }
             catch { alert = error.localizedDescription }
+        }
+    }
+
+    // MARK: First pass
+
+    var isDiscovering: Bool { selectedPath.map(discovering.contains) ?? false }
+
+    /// Reads the folder with the strongest model and drafts feature cards. Drafts don't run until marked ready.
+    func runFirstPass() {
+        guard let path = selectedPath, let config = selectedConfig, let client, !discovering.contains(path) else { return }
+        discovering.insert(path)
+        Task {
+            defer { discovering.remove(path) }
+            do {
+                let result = try await client.discover(config: config)
+                await reload(path)
+                if selectedPath == path { tab = .active }
+                notice = result.summary + String(format: " Cost: $%.2f.", result.costUsd)
+            } catch {
+                alert = error.localizedDescription
+            }
         }
     }
 

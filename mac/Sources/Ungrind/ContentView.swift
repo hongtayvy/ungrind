@@ -24,6 +24,11 @@ struct ContentView: View {
         } message: {
             Text(model.alert ?? "")
         }
+        .alert("First pass finished", isPresented: Binding(get: { model.notice != nil }, set: { if !$0 { model.notice = nil } })) {
+            Button("OK") { model.notice = nil }
+        } message: {
+            Text(model.notice ?? "")
+        }
         .confirmationDialog("This folder has no approved conventions file",
                             isPresented: Binding(get: { model.confirmShipWithoutConventions != nil }, set: { if !$0 { model.confirmShipWithoutConventions = nil } }),
                             presenting: model.confirmShipWithoutConventions) { card in
@@ -113,6 +118,9 @@ struct CardColumn: View {
         }
         .toolbar {
             ToolbarItemGroup {
+                Button { model.runFirstPass() } label: { Label("Read Folder", systemImage: "sparkles") }
+                    .help("First pass: read this folder with your strongest model and draft feature cards")
+                    .disabled(model.selectedState == nil || model.isDiscovering)
                 Button { model.reloadSelected() } label: { Label("Reload", systemImage: "arrow.clockwise") }
                     .help("Re-read cards, rules, and runs from the folder")
                     .disabled(model.selectedPath == nil)
@@ -141,12 +149,30 @@ struct CardList: View {
             .labelsHidden()
             .padding(10)
 
+            if model.isDiscovering {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Reading the folder and drafting cards. This can take a few minutes.").font(.callout).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12).padding(.bottom, 8)
+            }
+
             List(cards, selection: $model.selectedCardID) { card in
                 CardRow(card: card, isRunning: model.isRunning && model.run?.cardID == card.id)
                     .tag(card.id)
             }
             .overlay {
-                if cards.isEmpty {
+                if cards.isEmpty && state.cards.isEmpty && !model.isDiscovering {
+                    ContentUnavailableView {
+                        Label("No cards yet", systemImage: "sparkles")
+                    } description: {
+                        Text("Ungrind can read this folder and draft its feature cards: what already exists, and unfinished work it finds. It uses your strongest model, reads only, and drafts wait for your review.")
+                    } actions: {
+                        Button("Read This Folder") { model.runFirstPass() }.buttonStyle(.borderedProminent)
+                        Button("New Card") { model.newCard() }
+                    }
+                } else if cards.isEmpty && !model.isDiscovering {
                     ContentUnavailableView(emptyTitle, systemImage: "rectangle.stack", description: Text(emptyHint))
                 }
             }
@@ -207,7 +233,8 @@ struct StatusPill: View {
             .foregroundStyle(color)
     }
     private var color: Color {
-        switch card.status {
+        if card.draft && card.status != "done" { return .orange }
+        return switch card.status {
         case "ready": card.waiting ? .gray : .blue
         case "in_progress": .purple
         case "done": .green
