@@ -45,6 +45,7 @@ export class OllamaRunner {
     this.maxTurns = cfg.maxTurns ?? 40;
     this.think = cfg.think ?? false;
     this.numCtx = cfg.numCtx ?? null;
+    this.unsetEnv = cfg.unsetEnv ?? [];
     this.fetch = fetch;
   }
 
@@ -147,7 +148,7 @@ export class OllamaRunner {
         if (!checks.length) return "No checks configured.";
         const parts = [];
         for (const c of checks) {
-          const r = await commandCheck(c, cwd);
+          const r = await commandCheck(c, cwd, { unsetEnv: this.unsetEnv });
           parts.push(`## ${r.name}: ${r.passed ? "PASS" : "FAIL"}\n${r.output}`);
           if (!r.passed) break;
         }
@@ -165,6 +166,30 @@ export function safePath(cwd, rel) {
   const root = path.resolve(cwd);
   if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error(`path escapes the repository: ${rel}`);
   if (path.relative(root, abs).split(path.sep).includes(".git")) throw new Error("the .git folder is off-limits");
+
+  // Follow symlinks before trusting the path: a link inside the repo must not lead outside it.
+  const realRoot = fs.realpathSync(root);
+  const inside = (p) => p === realRoot || p.startsWith(realRoot + path.sep);
+  let probe = abs;
+  while (true) {
+    let st = null;
+    try { st = fs.lstatSync(probe); } catch { /* does not exist yet */ }
+    if (st) {
+      if (st.isSymbolicLink()) {
+        let real;
+        try { real = fs.realpathSync(probe); } catch { throw new Error(`refusing to follow a broken symbolic link: ${rel}`); }
+        if (!inside(real)) throw new Error(`path escapes the repository through a symbolic link: ${rel}`);
+        probe = real;
+      }
+      const real = fs.realpathSync(probe);
+      if (!inside(real)) throw new Error(`path escapes the repository through a symbolic link: ${rel}`);
+      if (path.relative(realRoot, real).split(path.sep).includes(".git")) throw new Error("the .git folder is off-limits");
+      break;
+    }
+    const parent = path.dirname(probe);
+    if (parent === probe) break;
+    probe = parent;
+  }
   return abs;
 }
 

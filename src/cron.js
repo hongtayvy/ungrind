@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { runOnce } from "./engine.js";
-import { readRunLog, writeRunLog } from "./runlog.js";
+import { readRunLog, writeRunLog, ensureStateIgnore } from "./runlog.js";
 
 /**
  * Cron wrapper: one scheduled invocation = lock, usage pre-check, then up to
@@ -57,7 +57,7 @@ function alive(pid) {
 
 /** Returns a release function, or null if another live run holds the lock. */
 export function acquireLock(stateDir, staleMin) {
-  fs.mkdirSync(stateDir, { recursive: true });
+  ensureStateIgnore(stateDir);
   const file = path.join(stateDir, "cron.lock");
   if (fs.existsSync(file)) {
     try {

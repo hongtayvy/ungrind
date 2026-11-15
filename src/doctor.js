@@ -18,6 +18,11 @@ function defaultExec(cmd, args, opts = {}) {
   return { code: r.error ? 127 : r.status ?? 1, stdout: r.stdout ?? "", stderr: r.stderr ?? "" };
 }
 
+// Lowest Node version with the published security fixes, per line. From the Node.js security releases of
+// Nov 11, 2026 (nodejs.org/en/blog/vulnerability). This goes stale: newer releases may exist.
+const PATCHED_NODE = { 22: [22, 23, 5], 24: [24, 22, 3], 26: [26, 13, 1] };
+const PATCHED_NODE_AS_OF = "2026-11-11";
+
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
 
 export async function doctor({ config = null, configError = null, exec = defaultExec, fetch = globalThis.fetch, env = process.env, nodeVersion = process.versions.node } = {}) {
@@ -25,9 +30,14 @@ export async function doctor({ config = null, configError = null, exec = default
   const add = (scope, id, title, status, detail, fix = null) => checks.push({ id, scope, title, status, detail, fix });
 
   // ---- This Mac ----
-  const major = Number(String(nodeVersion).split(".")[0]);
-  if (major >= 20) add("tools", "node", "Node.js", "ok", `Version ${nodeVersion}`);
-  else add("tools", "node", "Node.js", "fail", `Version ${nodeVersion} is too old. Ungrind needs 20 or later.`, "brew install node");
+  const parts = String(nodeVersion).split(".").map(Number);
+  const major = parts[0];
+  const atLeast = (min) => { for (let i = 0; i < 3; i++) { if ((parts[i] ?? 0) !== min[i]) return (parts[i] ?? 0) > min[i]; } return true; };
+  const patched = PATCHED_NODE[major];
+  if (!(major >= 20)) add("tools", "node", "Node.js", "fail", `Version ${nodeVersion} is too old. Ungrind needs 20 or later.`, "brew install node");
+  else if (patched && !atLeast(patched)) add("tools", "node", "Node.js", "warn", `Version ${nodeVersion} works, but Node has shipped security fixes since (this line is fixed in ${patched.join(".")}, per the Node.js security releases of ${PATCHED_NODE_AS_OF}). Update it.`, "brew upgrade node");
+  else if (!patched) add("tools", "node", "Node.js", "warn", `Version ${nodeVersion} is on a Node line that no longer gets security fixes. Move to an LTS release.`, "brew upgrade node");
+  else add("tools", "node", "Node.js", "ok", `Version ${nodeVersion}`);
 
   const g = exec("git", ["--version"]);
   if (g.code === 0) add("tools", "git", "Git", "ok", g.stdout.trim().replace(/^git version /, "Version "));
@@ -71,7 +81,7 @@ export async function doctor({ config = null, configError = null, exec = default
   if (configError) add("project", "rules", "Rules file", "fail", configError);
   if (config) {
     const repo = config.repo;
-    add("project", "rules", "Rules file", "ok", path.basename(config.file ?? "ungrind.config.yaml"));
+    add("project", "rules", "Rules file", "ok", `${path.basename(config.file ?? "ungrind.config.yaml")}. Its checks run as commands on your Mac when you ship, so only use projects you trust.`);
 
     const inRepo = git(repo, ["rev-parse", "--is-inside-work-tree"], { allowFail: true }) === "true";
     const hasCommit = inRepo && git(repo, ["rev-parse", "--verify", "--quiet", "HEAD"], { allowFail: true });

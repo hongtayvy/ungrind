@@ -23,7 +23,7 @@ export class CodexRunner {
   }
 
   async run({ prompt, cwd, model, timeoutMs, readOnly = false }) {
-    const r = await spawnAgent(this.bin, this.buildArgs({ cwd, model, readOnly }), { cwd, input: prompt, timeoutMs });
+    const r = await spawnAgent(this.bin, this.buildArgs({ cwd, model, readOnly }), { cwd, input: prompt, timeoutMs, unsetEnv: this.cfg.unsetEnv });
     if (r.spawnError) return { output: r.spawnError, exitCode: 127, usage: zeroUsage(), durationMs: r.durationMs, timedOut: false };
     const parsed = parseCodexJsonl(r.stdout, this.cfg.pricing);
     const exitCode = r.code !== 0 ? r.code : parsed.failed ? 1 : 0;

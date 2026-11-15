@@ -1,10 +1,17 @@
 import { spawn } from "node:child_process";
 
 /** Run a CLI agent with the prompt on stdin. Resolves { stdout, stderr, code, timedOut, durationMs, spawnError }. */
-export function spawnAgent(bin, args, { cwd, input, timeoutMs, env }) {
+/** The environment a child process gets: ours, minus the named secrets Ungrind itself uses (Notion, ntfy), plus extras. */
+export function childEnv(unsetEnv = [], extra = {}) {
+  const env = { ...process.env, ...extra };
+  for (const name of unsetEnv) delete env[name];
+  return env;
+}
+
+export function spawnAgent(bin, args, { cwd, input, timeoutMs, env, unsetEnv = [] }) {
   const started = Date.now();
   return new Promise((resolve) => {
-    const child = spawn(bin, args, { cwd, env: env ? { ...process.env, ...env } : process.env, stdio: ["pipe", "pipe", "pipe"] });
+    const child = spawn(bin, args, { cwd, env: childEnv(unsetEnv, env), stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "", stderr = "", timedOut = false;
     const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs);
     child.stdout.on("data", (d) => (stdout += d));

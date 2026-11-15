@@ -3,6 +3,7 @@ import path from "node:path";
 import { parseYaml, stringifyYaml } from "./yaml.js";
 import { validateConfig, loadConfig } from "./config.js";
 import { OllamaRunner } from "./agents/ollama.js";
+import { ensureStateIgnore } from "./runlog.js";
 
 /**
  * Rules editing for front ends. The config file stays the source of truth:
@@ -78,7 +79,7 @@ export function saveRules(configFile, rules) {
     parseYaml(out); // never write something we can't read back
   }
   const stateDir = loadConfig(file).prompts.stateDir;
-  fs.mkdirSync(stateDir, { recursive: true });
+  ensureStateIgnore(stateDir);
   const backup = path.join(stateDir, `rules.backup${path.extname(file)}`);
   fs.writeFileSync(backup, text);
   fs.writeFileSync(file, out);

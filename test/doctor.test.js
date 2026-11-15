@@ -26,13 +26,21 @@ const ALL = { git: "git version 2.54.0", "claude --version": "2.1.0 (Claude Code
 const by = (r) => Object.fromEntries(r.checks.map((c) => [c.id, c]));
 
 test("tools: everything ready, and the report never includes the account email", async () => {
-  const r = await doctor({ exec: fakeExec(ALL), fetch: ollama(["qwen:latest"]), env: {}, nodeVersion: "24.4.0" });
+  const r = await doctor({ exec: fakeExec(ALL), fetch: ollama(["qwen:latest"]), env: {}, nodeVersion: "24.22.3" });
   const c = by(r);
   assert.equal(r.ready, true);
   assert.equal(r.toolsReady, true);
   assert.deepEqual([c.node.status, c.git.status, c.claude.status, c["claude-login"].status, c.ollama.status, c.codex.status], ["ok", "ok", "ok", "ok", "ok", "info"]);
   assert.match(c["claude-login"].detail, /Claude subscription \(Pro\)/);
   assert.doesNotMatch(JSON.stringify(r), /someone@example\.com/);
+});
+
+test("tools: old or unsupported Node versions warn; patched ones are fine", async () => {
+  const node = async (v) => by(await doctor({ exec: fakeExec(ALL), fetch: down, env: {}, nodeVersion: v })).node;
+  assert.deepEqual([(await node("24.4.0")).status, (await node("24.22.2")).status, (await node("24.22.3")).status, (await node("24.30.0")).status, (await node("26.13.1")).status], ["warn", "warn", "ok", "ok", "ok"]);
+  assert.match((await node("24.4.0")).detail, /fixed in 24\.22\.3/);
+  assert.equal((await node("24.4.0")).fix, "brew upgrade node");
+  assert.deepEqual([(await node("22.23.4")).status, (await node("22.23.5")).status, (await node("25.1.0")).status, (await node("20.18.0")).status, (await node("18.0.0")).status], ["warn", "ok", "warn", "warn", "fail"]);
 });
 
 test("tools: missing or signed-out tools fail with a fix", async () => {

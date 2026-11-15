@@ -2,8 +2,17 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** Append one JSON record per run to <stateDir>/runs.jsonl. */
-export function writeRunLog(stateDir, record) {
+/** Logs can hold command output, so keep them out of git even if someone runs `git add -A` in the project. */
+export function ensureStateIgnore(stateDir) {
   fs.mkdirSync(stateDir, { recursive: true });
+  const file = path.join(stateDir, ".gitignore");
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, "# Written by Ungrind. Run logs can contain command output, so they stay out of git.\nruns.jsonl\ncron.log\ncron.lock\n*.bak\nrules.backup.*\n");
+  }
+}
+
+export function writeRunLog(stateDir, record) {
+  ensureStateIgnore(stateDir);
   fs.appendFileSync(path.join(stateDir, "runs.jsonl"), `${JSON.stringify(record)}\n`);
 }
 

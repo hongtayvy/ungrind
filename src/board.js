@@ -82,11 +82,16 @@ export async function writeBoard(config, source, file) {
 /** Localhost-only, GET-only server. Every request re-reads tasks and the run log. */
 export function serveBoard(config, source, { port = 4477, host = "127.0.0.1", refreshSec = 15 } = {}) {
   const server = http.createServer(async (req, res) => {
+    // A web page on another site can point its own hostname at 127.0.0.1 (DNS rebinding) and read this board.
+    // Only answer requests addressed to the loopback names this server actually listens on.
+    const hostHeader = String(req.headers.host ?? "").toLowerCase();
+    const p = server.address().port;
+    if (![`127.0.0.1:${p}`, `localhost:${p}`, `[::1]:${p}`].includes(hostHeader)) { res.writeHead(403).end("forbidden host"); return; }
     if (req.method !== "GET") { res.writeHead(405, { Allow: "GET" }).end("read-only"); return; }
     try {
       const state = await buildState(config, source);
-      if (req.url === "/api/state") { res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(state)); return; }
-      if (req.url === "/" || req.url.startsWith("/?")) { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" }).end(renderHtml(state, { refreshSec })); return; }
+      if (req.url === "/api/state") { res.writeHead(200, { "Content-Type": "application/json", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" }).end(JSON.stringify(state)); return; }
+      if (req.url === "/" || req.url.startsWith("/?")) { res.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'", "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store" }).end(renderHtml(state, { refreshSec })); return; }
       res.writeHead(404).end("not found");
     } catch (e) {
       res.writeHead(500, { "Content-Type": "text/plain" }).end(`board error: ${e.message}`);

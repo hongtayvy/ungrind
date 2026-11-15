@@ -47,8 +47,8 @@ export function createRunners(config, deps = {}) {
       if (deps[adapter]) return deps[adapter];
       if (!cache.has(adapter)) {
         if (adapter === "claude-code") cache.set(adapter, new ClaudeCodeRunner(config.agent));
-        else if (adapter === "codex") cache.set(adapter, new CodexRunner(config.agent.codex));
-        else if (adapter === "ollama") cache.set(adapter, new OllamaRunner(config.agent.ollama));
+        else if (adapter === "codex") cache.set(adapter, new CodexRunner({ ...config.agent.codex, unsetEnv: config.agent.unsetEnv }));
+        else if (adapter === "ollama") cache.set(adapter, new OllamaRunner({ ...config.agent.ollama, unsetEnv: config.agent.unsetEnv }));
         else throw new Error(`Unknown agent adapter: ${adapter} (use ${ADAPTERS.join(", ")})`);
       }
       return cache.get(adapter);

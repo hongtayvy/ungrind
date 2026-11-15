@@ -24,7 +24,7 @@ export class ClaudeCodeRunner {
   }
 
   async run({ prompt, cwd, model, timeoutMs, readOnly = false }) {
-    const r = await spawnAgent(this.bin, this.buildArgs({ model, readOnly }), { cwd, input: prompt, timeoutMs });
+    const r = await spawnAgent(this.bin, this.buildArgs({ model, readOnly }), { cwd, input: prompt, timeoutMs, unsetEnv: this.cfg.unsetEnv });
     if (r.spawnError) return { output: r.spawnError, exitCode: 127, usage: zeroUsage(), durationMs: r.durationMs, timedOut: false };
     return { ...parseResult(r.stdout, r.stderr, r.code), exitCode: r.code, durationMs: r.durationMs, timedOut: r.timedOut };
   }

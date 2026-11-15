@@ -8,6 +8,8 @@ Zero dependencies. Node 20+ and the `claude` CLI (logged in) are all you need.
 
 The full design and scope (V1, V2, Someday) is in [docs/design.md](docs/design.md).
 
+Read [SECURITY.md](SECURITY.md) before pointing Ungrind at a project you didn't write: it runs agents and shell commands on your Mac.
+
 ## Try the demo (2 minutes)
 
 ```bash

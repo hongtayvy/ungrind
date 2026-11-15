@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import path from "node:path";
 import { changedFiles } from "../git.js";
 import { matchesAny } from "../glob.js";
+import { childEnv } from "../agents/spawn.js";
 
 const MAX_OUTPUT = 6000;
 const tail = (s) => (s.length > MAX_OUTPUT ? `[...truncated...]\n${s.slice(-MAX_OUTPUT)}` : s);
@@ -11,11 +12,11 @@ const tail = (s) => (s.length > MAX_OUTPUT ? `[...truncated...]\n${s.slice(-MAX_
  * fails on timeout. Captures stdout+stderr for the retry prompt.
  * Result shape for every check: { name, passed, output, durationMs }
  */
-export function commandCheck(check, repo) {
+export function commandCheck(check, repo, { unsetEnv = [] } = {}) {
   const started = Date.now();
   const cwd = path.resolve(repo, check.cwd);
   return new Promise((resolve) => {
-    const child = spawn("sh", ["-c", check.command], { cwd, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn("sh", ["-c", check.command], { cwd, env: childEnv(unsetEnv), detached: true, stdio: ["ignore", "pipe", "pipe"] });
     let out = "", timedOut = false;
     const killGroup = () => { try { process.kill(-child.pid, "SIGKILL"); } catch { child.kill("SIGKILL"); } };
     const timer = setTimeout(() => { timedOut = true; killGroup(); }, check.timeoutSec * 1000);
@@ -63,7 +64,7 @@ export async function runVerifiers({ config, task, excludes }) {
   results.push(guard);
   if (!guard.passed) return { passed: false, results, files: guard.files };
   for (const check of config.verifiers) {
-    const r = await commandCheck(check, config.repo);
+    const r = await commandCheck(check, config.repo, { unsetEnv: config.agent.unsetEnv });
     results.push(r);
     if (!r.passed) return { passed: false, results, files: guard.files };
   }

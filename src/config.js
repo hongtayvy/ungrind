@@ -82,7 +82,10 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     remote: g.remote ?? "origin",
     protectedBranches: g.protectedBranches ?? ["main", "master"],
   };
-  if (!guardrails.branchPattern.includes("{slug}")) err(`guardrails.branchPattern: must contain {slug}`);
+  if (typeof guardrails.branchPattern !== "string" || !guardrails.branchPattern.includes("{slug}")) err(`guardrails.branchPattern: must contain {slug}`);
+  else if (!/^[A-Za-z0-9][A-Za-z0-9._\/{}-]*$/.test(guardrails.branchPattern) || /\.\.|\/\/|\.lock\b|\/$|@\{/.test(guardrails.branchPattern)) {
+    err("guardrails.branchPattern: use letters, numbers, . _ - and / only, starting with a letter or number (for example loop/{slug})");
+  }
   if (!Number.isInteger(guardrails.maxAttempts) || guardrails.maxAttempts < 1) err("guardrails.maxAttempts: must be a positive integer");
 
   // 4. Routing
@@ -124,6 +127,8 @@ export function validateConfig(raw, { baseDir = process.cwd() } = {}) {
     byType: isObj(a.byType) ? a.byType : {},
     codex: isObj(a.codex) ? a.codex : {},
     ollama: isObj(a.ollama) ? a.ollama : {},
+    // Ungrind's own credentials (Notion, ntfy) are never passed to agents or check commands.
+    unsetEnv: [taskSource.tokenEnv, gates.notify.tokenEnv].filter((n) => typeof n === "string" && n),
     timeoutSec: a.timeoutSec ?? 1200,
     allowedTools: a.allowedTools ?? ["Read", "Edit", "Write", "Glob", "Grep", "Bash"],
     disallowedTools: a.disallowedTools ?? ["Bash(git push:*)", "Bash(git merge:*)", "Bash(git checkout:*)", "Bash(git switch:*)", "Bash(git reset:*)", "Bash(git branch:*)"],
