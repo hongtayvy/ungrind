@@ -1,0 +1,180 @@
+import Foundation
+
+/// Everything the app shows for one project, as printed by `ungrind state`.
+public struct ProjectState: Codable, Equatable {
+    public var project: String
+    public var repo: String
+    public var configFile: String?
+    public var adapter: String
+    public var promptVersion: String?
+    public var conventionsApproved: Bool
+    public var rules: Rules
+    public var cards: [Card]
+    public var runs: [RunSummary]
+
+    public func cards(in tab: CardTab) -> [Card] {
+        cards.filter { $0.tab == tab }.sorted {
+            ($0.priority ?? .greatestFiniteMagnitude, $0.id) < ($1.priority ?? .greatestFiniteMagnitude, $1.id)
+        }
+    }
+
+    public func lastRun(for cardID: String) -> RunSummary? {
+        runs.first { $0.taskId == cardID } // runs are newest first
+    }
+}
+
+public struct Rules: Codable, Equatable {
+    public struct Verifier: Codable, Equatable, Hashable {
+        public var name: String
+        public var command: String
+    }
+    public struct Agents: Codable, Equatable {
+        public var `default`: String
+        public var byTier: [String: String]
+        public var byType: [String: String]
+        public var available: [String]
+    }
+    public struct Review: Codable, Equatable {
+        public var agent: String
+        public var blocking: Bool
+    }
+    public var ladder: [String]
+    public var tierBySize: [String: String]
+    public var defaultTier: String
+    public var failuresPerTier: Int
+    public var maxCostUsd: Double
+    public var maxAttempts: Int
+    public var maxChangedFiles: Int
+    public var forbiddenPaths: [String]
+    public var branchPattern: String
+    public var verifiers: [Verifier]
+    public var agents: Agents
+    public var humanApprovalTypes: [String]
+    public var review: Review?
+}
+
+public enum CardTab: String, CaseIterable, Identifiable {
+    case active = "Active", shipped = "Shipped", archived = "Archived"
+    public var id: String { rawValue }
+}
+
+public struct Route: Codable, Equatable, Hashable {
+    public var startTier: String
+    public var agent: String
+    public var model: String?
+    public var overridden: Bool
+}
+
+public struct Card: Codable, Identifiable, Equatable, Hashable {
+    public var id: String
+    public var title: String
+    public var goal: String
+    public var criteria: [String]
+    public var files: [String]
+    public var status: String // ready | in_progress | done | blocked | unknown:<name>
+    public var priority: Double?
+    public var dependencies: [String]
+    public var size: String?
+    public var type: String?
+    public var tier: String?
+    public var agent: String?
+    public var approved: Bool
+    public var archived: Bool
+    public var problems: [String]
+    public var waiting: Bool
+    public var needsApproval: Bool
+    public var notes: String
+    public var summary: String
+    public var file: String?
+    public var route: Route
+
+    /// Archived wins; a done card is Shipped; everything else is Active.
+    public var tab: CardTab {
+        if archived { return .archived }
+        return status == "done" ? .shipped : .active
+    }
+
+    public var statusLabel: String {
+        switch status {
+        case "ready": return waiting ? "Waiting" : "Ready"
+        case "in_progress": return "In progress"
+        case "done": return "Shipped"
+        case "blocked": return "Blocked"
+        default: return status.replacingOccurrences(of: "unknown:", with: "")
+        }
+    }
+
+    /// A card can be shipped when it is ready, passes the contract, and nothing gates it.
+    public var canShip: Bool {
+        status == "ready" && !archived && !waiting && problems.isEmpty && !needsApproval
+    }
+
+    public var shipBlocker: String? {
+        if archived { return "Archived cards don't run." }
+        if !problems.isEmpty { return "Fix the card first: \(problems.joined(separator: "; "))." }
+        if status == "done" { return "Already shipped." }
+        if status == "in_progress" { return "A run is already in progress for this card." }
+        if status == "blocked" { return "Blocked. Read the notes, fix the card, then set it back to Ready." }
+        if waiting { return "Waiting on: \(dependencies.joined(separator: ", "))." }
+        if needsApproval { return "This card's type needs your approval first (tick Approved in the editor)." }
+        return status == "ready" ? nil : "Status is \(statusLabel)."
+    }
+}
+
+public struct RunSummary: Codable, Equatable, Identifiable, Hashable {
+    public var ts: String
+    public var taskId: String
+    public var task: String
+    public var result: String
+    public var reason: String?
+    public var branch: String?
+    public var dryRun: Bool
+    public var pushed: Bool
+    public var path: String
+    public var agents: String
+    public var attempts: Int
+    public var costUsd: Double
+    public var durationMs: Double
+    public var id: String { ts + taskId }
+}
+
+/// What the editor sends to `ungrind card-save`.
+public struct CardDraft: Codable, Equatable {
+    public var id: String?
+    public var title = ""
+    public var goal = ""
+    public var criteria: [String] = []
+    public var files: [String] = []
+    public var status = "ready"
+    public var priority: Double = 1
+    public var size: String?
+    public var type: String?
+    public var tier: String?
+    public var agent: String?
+    public var dependencies: [String] = []
+    public var approved = false
+    public var archived = false
+
+    public init() {}
+
+    public init(card: Card) {
+        id = card.id; title = card.title; goal = card.goal; criteria = card.criteria; files = card.files
+        status = card.status.hasPrefix("unknown") ? "ready" : card.status
+        priority = card.priority ?? 1; size = card.size; type = card.type; tier = card.tier; agent = card.agent
+        dependencies = card.dependencies; approved = card.approved; archived = card.archived
+    }
+
+    /// The same checks the engine's task contract makes, so the editor can warn before saving.
+    public var contractProblems: [String] {
+        var out: [String] = []
+        if title.trimmingCharacters(in: .whitespaces).isEmpty { out.append("Add a title.") }
+        if goal.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { out.append("Add a goal.") }
+        if criteria.allSatisfy({ $0.trimmingCharacters(in: .whitespaces).isEmpty }) { out.append("Add at least one acceptance criterion.") }
+        if files.isEmpty { out.append("Add at least one file or folder in scope.") }
+        return out
+    }
+}
+
+public struct SaveResult: Codable { public var id: String; public var file: String }
+public struct InitResult: Codable { public var configFile: String; public var created: Bool }
+public struct FindConfigResult: Codable { public var configFile: String? }
