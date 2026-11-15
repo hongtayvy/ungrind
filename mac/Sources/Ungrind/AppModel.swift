@@ -60,6 +60,10 @@ final class AppModel {
     var alert: String?
     var engineProblem: String?
     var confirmShipWithoutConventions: Card?
+    var showSetup = false
+    var setup: SetupReport?
+    var checkingSetup = false
+    var draftingConventions = false
     /// The rules being edited, loaded fresh from the folder each time the editor opens.
     var editingRules: RulesPayload?
     var notice: String?
@@ -82,8 +86,12 @@ final class AppModel {
             client = EngineClient(env: env)
             selectedPath = defaults.string(forKey: "selectedProject").flatMap { p in projects.contains { $0.path == p } ? p : nil } ?? projects.first?.path
             reloadSelected()
+            // First launch, or a tool that runs need is missing: show the setup screen.
+            await checkSetup()
+            if !defaults.bool(forKey: "setupSeen") || setup?.toolsReady == false { showSetup = true }
         } catch {
             engineProblem = error.localizedDescription
+            showSetup = true
         }
     }
 
@@ -204,6 +212,52 @@ final class AppModel {
             } catch {
                 alert = error.localizedDescription
             }
+        }
+    }
+
+    // MARK: Setup
+
+    /// Re-runs the setup check for this Mac and the selected project. Read-only.
+    func checkSetup() async {
+        guard let client else { return }
+        checkingSetup = true
+        defer { checkingSetup = false }
+        if let path = selectedPath, loads[path] == nil { await reload(path) }
+        do { setup = try await client.doctor(config: selectedConfig ?? setupConfigFallback) }
+        catch { alert = error.localizedDescription }
+    }
+
+    /// A folder whose rules file exists but doesn't load still gets a project report (it says why).
+    private var setupConfigFallback: String? {
+        guard let path = selectedPath, case .failed? = loads[path] else { return nil }
+        return ["ungrind.config.yaml", "ungrind.config.yml", "ungrind.config.json"].map { path + "/" + $0 }.first { FileManager.default.fileExists(atPath: $0) }
+    }
+
+    func finishSetup() {
+        defaults.set(true, forKey: "setupSeen")
+        showSetup = false
+    }
+
+    /// Has the strongest model read the project and write a conventions draft. Costs one read-only run.
+    func draftConventions() {
+        guard let config = selectedConfig, let client, !draftingConventions else { return }
+        draftingConventions = true
+        Task {
+            defer { draftingConventions = false }
+            do { try await client.draftConventions(config: config) }
+            catch { alert = error.localizedDescription }
+            await checkSetup()
+        }
+    }
+
+    /// The user's sign-off on the conventions draft. Only ever called from their button press.
+    func approveConventions() {
+        guard let path = selectedPath, let config = selectedConfig, let client else { return }
+        Task {
+            do { try await client.approveConventions(config: config) }
+            catch { alert = error.localizedDescription }
+            await reload(path)
+            await checkSetup()
         }
     }
 

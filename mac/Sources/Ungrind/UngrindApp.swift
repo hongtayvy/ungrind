@@ -28,6 +28,12 @@ struct UngrindApp: App {
         }
         .defaultSize(width: 1252, height: 780)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Setup Check…") {
+                    model.showSetup = true
+                    Task { await model.checkSetup() }
+                }
+            }
             CommandGroup(replacing: .newItem) {
                 Button("New Card") { model.newCard() }
                     .keyboardShortcut("n")

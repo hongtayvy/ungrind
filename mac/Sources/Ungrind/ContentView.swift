@@ -20,6 +20,7 @@ struct ContentView: View {
         .sheet(item: $model.editing) { draft in
             CardEditor(draft: draft)
         }
+        .sheet(isPresented: $model.showSetup) { SetupView() }
         .sheet(item: $model.editingRules) { payload in
             RulesEditor(payload: payload)
         }

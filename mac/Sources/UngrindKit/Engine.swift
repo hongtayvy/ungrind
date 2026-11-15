@@ -132,6 +132,21 @@ public final class EngineClient: @unchecked Sendable {
         try await json(DiscoverResult.self, ["discover", "--config", config, "--max", String(max)])
     }
 
+    /// Setup check for this Mac and, when a config is given, that project. Read-only.
+    public func doctor(config: String?) async throws -> SetupReport {
+        try await json(SetupReport.self, ["doctor"] + (config.map { ["--config", $0] } ?? []))
+    }
+
+    /// The strongest model reads the project (read-only) and writes a conventions draft for review.
+    public func draftConventions(config: String) async throws {
+        _ = try await output(["onboard", "--config", config])
+    }
+
+    /// Human approval: promote the reviewed draft so every run uses it.
+    public func approveConventions(config: String) async throws {
+        _ = try await output(["approve", "--config", config])
+    }
+
     public func rules(config: String) async throws -> RulesPayload {
         try await json(RulesPayload.self, ["rules", "--config", config])
     }

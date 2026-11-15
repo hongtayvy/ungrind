@@ -263,4 +263,40 @@ public struct RulesPayload: Codable, Equatable {
 }
 public struct RulesSaveResult: Codable { public var saved: Bool; public var backup: String }
 
+/// One line of the setup check (`ungrind doctor`).
+public struct SetupCheck: Codable, Identifiable, Equatable {
+    public var id: String
+    public var scope: String   // "tools" (this Mac) or "project"
+    public var title: String
+    public var status: String  // ok | warn | fail | info
+    public var detail: String
+    public var fix: String?
+    public init(id: String, scope: String, title: String, status: String, detail: String, fix: String? = nil) {
+        self.id = id; self.scope = scope; self.title = title; self.status = status; self.detail = detail; self.fix = fix
+    }
+}
+
+public struct SetupReport: Codable, Equatable {
+    public struct Conventions: Codable, Equatable {
+        public var approved: Bool
+        public var path: String
+        public var draft: String?
+    }
+    public var checks: [SetupCheck]
+    public var ready: Bool
+    public var toolsReady: Bool
+    public var conventions: Conventions?
+
+    public func checks(in scope: String) -> [SetupCheck] { checks.filter { $0.scope == scope } }
+
+    /// One line for the header.
+    public var headline: String {
+        let fails = checks.filter { $0.status == "fail" }.count
+        let warns = checks.filter { $0.status == "warn" }.count
+        if fails > 0 { return "\(fails) thing\(fails == 1 ? "" : "s") to fix before cards can run." }
+        if warns > 0 { return "Ready to run. \(warns) thing\(warns == 1 ? "" : "s") worth a look." }
+        return "Everything is ready."
+    }
+}
+
 public struct FindConfigResult: Codable { public var configFile: String? }

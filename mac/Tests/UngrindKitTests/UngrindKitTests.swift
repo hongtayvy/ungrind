@@ -69,6 +69,17 @@ final class ModelTests: XCTestCase {
         XCTAssertEqual(r.problems.count, 2)
     }
 
+    func testSetupReportHeadline() {
+        let ok = SetupCheck(id: "a", scope: "tools", title: "A", status: "ok", detail: "")
+        let warn = SetupCheck(id: "b", scope: "project", title: "B", status: "warn", detail: "")
+        let fail = SetupCheck(id: "c", scope: "tools", title: "C", status: "fail", detail: "", fix: "do x")
+        XCTAssertEqual(SetupReport(checks: [ok], ready: true, toolsReady: true).headline, "Everything is ready.")
+        XCTAssertEqual(SetupReport(checks: [ok, warn], ready: true, toolsReady: true).headline, "Ready to run. 1 thing worth a look.")
+        let bad = SetupReport(checks: [ok, warn, fail, fail], ready: false, toolsReady: false)
+        XCTAssertEqual(bad.headline, "2 things to fix before cards can run.")
+        XCTAssertEqual(bad.checks(in: "tools").map(\.id), ["a", "c", "c"])
+    }
+
     func testShellProbeParsing() {
         let noisy = "[oh-my-zsh] update?\n__UG_NODE__/opt/homebrew/bin/node__UG_PATH__/opt/homebrew/bin:/usr/bin__UG_END__"
         let p = EngineEnvironment.parseShellProbe(noisy)
@@ -154,6 +165,23 @@ final class EngineIntegrationTests: XCTestCase {
         payload.rules.verifiers = []
         do { _ = try await client.saveRules(payload.rules, config: config); XCTFail("expected an error") }
         catch let e as EngineError { XCTAssertTrue(e.message.contains("nothing was saved"), e.message) }
+    }
+
+    func testDoctorThroughEngine() async throws {
+        let client = EngineClient(env: try EngineEnvironment.discover())
+        let tools = try await client.doctor(config: nil)
+        XCTAssertTrue(tools.checks.contains { $0.id == "node" && $0.status == "ok" })
+        XCTAssertNil(tools.conventions)
+        XCTAssertTrue(tools.checks(in: "project").isEmpty)
+
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ungrind-mac-doctor-\(UUID().uuidString)").path
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let config = try await client.initProject(dir: dir).configFile
+        let report = try await client.doctor(config: config)
+        XCTAssertEqual(report.checks.first { $0.id == "repo" }?.status, "fail") // no git repo yet
+        XCTAssertEqual(report.conventions?.approved, false)
+        XCTAssertFalse(report.ready)
     }
 
     func testStreamDeliversLinesAndExitCode() async throws {

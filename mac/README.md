@@ -39,6 +39,7 @@ open dist/Ungrind.app --env UNGRIND_APPEARANCE=dark
 | Add a folder | `ungrind find-config --dir <folder>` |
 | Set Up Ungrind Here | `ungrind init --dir <folder>` (writes `ungrind.config.yaml` and `tasks/`; never overwrites) |
 | Read This Folder (first pass) | `ungrind discover --config <file>` (read-only run on the strongest tier) |
+| Setup screen | `ungrind doctor [--config <file>]` (read-only check of this Mac and the project); Draft Conventions runs `ungrind onboard`, Approve runs `ungrind approve` |
 | Edit Rules… | `ungrind rules --config <file>` to load, `ungrind rules-save` with JSON on stdin to save (validated first, previous version kept in `.ungrind/rules.backup.yaml`) |
 | Load or reload | `ungrind state --config <file>` (rules, cards with route and problems, runs) |
 | Create or edit a card, route override, archive | `ungrind card-save --config <file>` with JSON on stdin |
@@ -48,6 +49,7 @@ Node is found by asking your login shell (`$SHELL -ilc`), because apps launched 
 
 ## What works today
 
+- **Setup screen:** shown on first launch, whenever a required tool is missing, and from Ungrind › Setup Check…. It checks Node, git, Claude Code and its sign-in (and says whether runs use your subscription or an API key), Ollama, and Codex; then, for the selected project, the git repo, working tree, pushing, checks, cards, route, and conventions. Each problem comes with the command that fixes it. From the same screen you can draft the conventions file, open the draft to review it, and approve it.
 - **First pass:** "Read This Folder" has your strongest model read the repo and write feature cards. Features that already exist land in Shipped; unfinished work it finds evidence for (TODOs, known bugs, things the README promises) lands in Active as drafts. A draft can't run until you click Mark Ready.
 - **Three columns:** folders, the folder's feature cards (Active / Shipped / Archived), and the selected card's goal, scope, route, rules, and last run.
 - **Cards:** create and edit in the app. Cards are the same markdown files the CLI uses, so edits in your editor show up when you return to the app.
@@ -60,6 +62,5 @@ Node is found by asking your login shell (`$SHELL -ilc`), because apps launched 
 
 - **Shipped on push, Archived after merge:** today Shipped means the engine marked the card Done (checks passed, branch pushed when a remote exists). Archive is a manual action.
 - **Compacting card history.**
-- **Onboarding in the app:** the conventions draft and approval still run from the CLI (`ungrind onboard`, `ungrind approve`). Ship asks before running without one.
 - **Bundled Node:** the app uses the Node already on your Mac.
 - **Notarized DMG, MCP-driven folders, and versioned folders without git.**
