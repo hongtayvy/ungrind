@@ -6,6 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Needed when launched as a bare executable (swift run); harmless inside the .app bundle.
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        // For checking the design: UNGRIND_APPEARANCE=dark|light forces an appearance for this launch.
+        switch ProcessInfo.processInfo.environment["UNGRIND_APPEARANCE"] {
+        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light": NSApp.appearance = NSAppearance(named: .aqua)
+        default: break
+        }
     }
 }
 
@@ -20,6 +26,7 @@ struct UngrindApp: App {
                 .environment(model)
                 .frame(minWidth: 980, minHeight: 600)
         }
+        .defaultSize(width: 1252, height: 780)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Card") { model.newCard() }

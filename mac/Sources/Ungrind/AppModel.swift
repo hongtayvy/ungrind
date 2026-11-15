@@ -24,6 +24,18 @@ struct RunSession: Equatable {
     var lines: [String] = []
     var exitCode: Int32?
     var isRunning: Bool { exitCode == nil }
+
+    /// "Attempt 2 of 6 · sonnet", taken from the engine's own log once it is known.
+    var attemptInfo: String? {
+        guard let line = lines.last(where: { $0.contains("] attempt ") && $0.contains(" at ") }),
+              let m = line.firstMatch(of: #/attempt (\d+)/(\d+) at (\S+)/#) else { return nil }
+        return "Attempt \(m.1) of \(m.2) · \(m.3)"
+    }
+
+    /// The most recent log line, without the engine prefix.
+    var latestLine: String? {
+        lines.last.map { $0.replacingOccurrences(of: "[ungrind] ", with: "") }
+    }
     var outcome: String {
         guard let exitCode else { return dryRun ? "Dry run in progress" : "Shipping" }
         let last = lines.last { $0.contains("[ungrind] result:") }?.replacingOccurrences(of: "[ungrind] result: ", with: "")
@@ -38,7 +50,11 @@ final class AppModel {
     var selectedPath: String? { didSet { if oldValue != selectedPath { selectedCardID = nil; reloadSelected() } } }
     var loads: [String: ProjectLoad] = [:]
     var selectedCardID: String?
-    var tab: CardTab = .active
+    var tab: CardTab = .active { didSet { if oldValue != tab { normalizeSelection() } } }
+    /// Filters card titles within the selected tab.
+    var search = "" { didSet { if oldValue != search { normalizeSelection() } } }
+    /// True from the moment Stop is pressed until the engine process actually exits.
+    var stopping = false
     var editing: CardDraft?
     var run: RunSession?
     var alert: String?
@@ -80,6 +96,35 @@ final class AppModel {
         return nil
     }
     var selectedCard: Card? { selectedState?.cards.first { $0.id == selectedCardID } }
+
+    /// Cards in the selected tab that match the search, in the engine's priority order.
+    var visibleCards: [Card] {
+        guard let state = selectedState else { return [] }
+        let q = search.trimmingCharacters(in: .whitespaces)
+        let cards = state.cards(in: tab)
+        return q.isEmpty ? cards : cards.filter { $0.title.localizedCaseInsensitiveContains(q) }
+    }
+
+    /// Keep the selection when it is still visible; otherwise move to the first visible card or clear it,
+    /// so the detail pane never shows a card from another tab or search.
+    func normalizeSelection() {
+        let visible = visibleCards
+        if let id = selectedCardID, visible.contains(where: { $0.id == id }) { return }
+        selectedCardID = visible.first?.id
+    }
+
+    /// True when the given card in the selected folder is the one being run.
+    func session(for card: Card) -> RunSession? {
+        guard let run, run.cardID == card.id, run.projectPath == selectedPath else { return nil }
+        return run
+    }
+
+    func moveSelection(by offset: Int) {
+        let visible = visibleCards
+        guard !visible.isEmpty else { return }
+        let i = visible.firstIndex { $0.id == selectedCardID } ?? (offset > 0 ? -1 : visible.count)
+        selectedCardID = visible[min(max(i + offset, 0), visible.count - 1)].id
+    }
     var isRunning: Bool { run?.isRunning ?? false }
 
     // MARK: Projects
@@ -124,6 +169,7 @@ final class AppModel {
         do {
             guard let config = try await client.findConfig(dir: path) else { loads[path] = .needsSetup; return }
             loads[path] = .ready(try await client.state(config: config), config: config)
+            if path == selectedPath { normalizeSelection() }
         } catch {
             loads[path] = .failed(error.localizedDescription)
         }
@@ -172,8 +218,11 @@ final class AppModel {
         do {
             let saved = try await client.save(draft, config: config)
             await reload(path)
+            if let c = selectedState?.cards.first(where: { $0.id == saved.id }) {
+                tab = c.tab
+                if !visibleCards.contains(where: { $0.id == c.id }) { search = "" }
+            }
             selectedCardID = saved.id
-            if let c = selectedCard { tab = c.tab }
             return true
         } catch {
             alert = error.localizedDescription
@@ -206,12 +255,18 @@ final class AppModel {
             Task { @MainActor in
                 self.run?.exitCode = code
                 self.handle = nil
+                self.stopping = false
                 await self.reload(path)
             }
         })
     }
 
-    func stopRun() { handle?.stop() }
+    /// Asks the engine to stop. The card's real state is re-read when the process exits.
+    func stopRun() {
+        guard handle != nil else { return }
+        stopping = true
+        handle?.stop()
+    }
 
     // MARK: Opening things in the user's own tools
 

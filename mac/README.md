@@ -22,6 +22,16 @@ To work on it in Xcode, open `mac/Package.swift`. Tests:
 swift test
 ```
 
+## Design
+
+The look follows the UI handoff in `docs/ui-handoff/` ("quiet momentum"): three calm columns, system type, native controls, and one accent, amber `#EA9828`. Tokens and shared styles live in `Sources/Ungrind/DesignSystem.swift` and adapt to light, dark, and Increase Contrast. Warnings use a rust tone so they don't read like the amber accent.
+
+To check an appearance without changing your system setting:
+
+```bash
+open dist/Ungrind.app --env UNGRIND_APPEARANCE=dark
+```
+
 ## How it talks to the engine
 
 | App action | Engine command |
