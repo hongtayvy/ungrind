@@ -131,3 +131,42 @@ export function parseFrontMatter(text) {
   if (!m) return { data: {}, body: text };
   return { data: parseYaml(m[1]), body: m[2] ?? "" };
 }
+
+// ---- Writing ----
+// stringifyYaml emits only what parseYaml reads back: block maps, flow lists of scalars,
+// block lists of maps, and JSON-quoted strings wherever a plain scalar would be ambiguous.
+
+const PLAIN_STRING = /^[A-Za-z_][A-Za-z0-9_ .\/-]*$/;
+const RESERVED = /^(true|false|null|yes|no|on|off|~)$/i;
+
+function yamlScalar(v) {
+  if (v === null || v === undefined) return "null";
+  if (typeof v === "string") return PLAIN_STRING.test(v) && !RESERVED.test(v) && !v.endsWith(" ") ? v : JSON.stringify(v);
+  return String(v);
+}
+const isScalarValue = (v) => v === null || typeof v !== "object";
+
+export function stringifyYaml(obj, indent = 0) {
+  const pad = " ".repeat(indent);
+  const lines = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined) continue;
+    const key = /^[A-Za-z_][A-Za-z0-9_.-]*$/.test(k) ? k : JSON.stringify(k);
+    if (isScalarValue(v)) lines.push(`${pad}${key}: ${yamlScalar(v)}`);
+    else if (Array.isArray(v)) {
+      if (v.length === 0) lines.push(`${pad}${key}: []`);
+      else if (v.every(isScalarValue)) lines.push(`${pad}${key}: [${v.map((x) => (typeof x === "string" ? JSON.stringify(x) : yamlScalar(x))).join(", ")}]`);
+      else {
+        lines.push(`${pad}${key}:`);
+        for (const item of v) {
+          if (isScalarValue(item) || Array.isArray(item)) { lines.push(`${pad}  - ${Array.isArray(item) ? JSON.stringify(item) : yamlScalar(item)}`); continue; }
+          const body = stringifyYaml(item, indent + 4).split("\n");
+          body[0] = `${pad}  - ${body[0].slice(indent + 4)}`;
+          lines.push(...body);
+        }
+      }
+    } else if (Object.keys(v).length === 0) lines.push(`${pad}${key}: {}`);
+    else lines.push(`${pad}${key}:`, stringifyYaml(v, indent + 2));
+  }
+  return lines.join("\n");
+}

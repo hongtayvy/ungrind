@@ -16,6 +16,7 @@ import { serveBoard, writeBoard } from "../src/board.js";
 import { buildProjectState, saveCard, initProject, findConfig } from "../src/app.js";
 import fs from "node:fs";
 import { discover } from "../src/discover.js";
+import { getRules, saveRules } from "../src/rules.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -42,6 +43,8 @@ Commands:
       --out <file>       Write a static HTML snapshot instead of serving
   init --dir <folder>  Write a starter config and tasks folder (never overwrites); prints JSON
   discover [--max n]   First pass: the strongest tier reads the repo and drafts feature cards; prints JSON
+  rules                Print the editable rules, Ungrind defaults, and installed local models as JSON
+  rules-save           Save edited rules from JSON on stdin (validated first; keeps a backup)
   state                Print project rules, feature cards, and recent runs as JSON (for front ends)
   card-save            Create or update a card from JSON on stdin (local files); prints JSON
   bench                Run the benchmark suite in throwaway copies of its fixture (no --config needed)
@@ -149,6 +152,10 @@ async function main() {
       const r = await discover({ config, source: source(), runners: runners(), templates: templates(), max, log: (m) => console.error(m) });
       return console.log(JSON.stringify(r));
     }
+    case "rules":
+      return console.log(JSON.stringify(await getRules(config)));
+    case "rules-save":
+      return console.log(JSON.stringify(saveRules(config.file, JSON.parse(fs.readFileSync(0, "utf8")))));
     case "state":
       return console.log(JSON.stringify(await buildProjectState(config, source())));
     case "card-save":
