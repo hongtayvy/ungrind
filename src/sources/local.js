@@ -72,6 +72,7 @@ export class LocalSource {
       tier: data.tier ?? null,
       agent: data.agent ?? null,
       archived: data.archived === true,
+      draft: data.draft === true,
       notes: (sections.notes ?? "").trim(),
       summary: (sections.summary ?? "").trim(),
       _file: file,

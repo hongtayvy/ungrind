@@ -25,9 +25,9 @@ export async function buildProjectState(config, source, { maxRuns = 200 } = {}) 
       id: t.id, title: t.title ?? "", goal: t.goal ?? "", criteria: t.criteria ?? [], files: t.files ?? [],
       status: t.status, priority: Number.isFinite(t.priority) ? t.priority : null, dependencies: t.dependencies ?? [],
       size: t.size ?? null, type: t.type ?? null, tier: t.tier ?? null, agent: t.agent ?? null,
-      approved: Boolean(t.approved), archived: Boolean(t.archived),
+      approved: Boolean(t.approved), archived: Boolean(t.archived), draft: Boolean(t.draft),
       problems: [...validateTask(t), ...routeProblems(config, t)],
-      waiting: t.status === "ready" && !t.archived && !runnable.has(t.id),
+      waiting: t.status === "ready" && !t.archived && !t.draft && !runnable.has(t.id),
       needsApproval: Boolean(t.type && config.gates.humanApprovalTypes.includes(t.type) && !t.approved),
       notes: t.notes ?? "", summary: t.summary ?? "", file: t._file ?? null,
       route: { startTier: tier, agent, model: modelFor(config, agent, tier), overridden: Boolean(t.tier || t.agent) },
@@ -84,7 +84,7 @@ function rebuildBody(oldBody, goal, criteria) {
 
 /**
  * Create or update a card file. `card`: { id?, title, goal, criteria[], files[], status, priority,
- * size?, type?, tier?, agent?, dependencies[], approved, archived }. Unknown front matter keys
+ * size?, type?, tier?, agent?, dependencies[], approved, archived, draft }. Unknown front matter keys
  * (e.g. Obsidian properties) and engine-written sections are preserved.
  */
 export function saveCard(config, card) {
@@ -111,7 +111,7 @@ export function saveCard(config, card) {
   const optional = { size: card.size, type: card.type, tier: card.tier, agent: card.agent };
   for (const [k, v] of Object.entries(optional)) { if (v) data[k] = v; else delete data[k]; }
   if (card.dependencies?.length) data.dependencies = card.dependencies; else delete data.dependencies;
-  for (const k of ["approved", "archived"]) { if (card[k]) data[k] = true; else delete data[k]; }
+  for (const k of ["approved", "archived", "draft"]) { if (card[k]) data[k] = true; else delete data[k]; }
   const fm = Object.entries(data).filter(([, v]) => v !== null && v !== undefined).map(([k, v]) => `${k}: ${yamlValue(v)}`).join("\n");
   fs.writeFileSync(file, `---\n${fm}\n---\n${rebuildBody(existing.body, card.goal ?? "", card.criteria ?? [])}`);
   return { id: data.id ? String(data.id) : path.basename(file, ".md"), file };

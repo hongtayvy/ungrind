@@ -15,6 +15,7 @@ const DEFAULT_PROPS = {
   tier: "Tier",
   agent: "Agent",
   archived: "Archived",
+  draft: "Draft",
 };
 
 /**
@@ -84,6 +85,7 @@ export class NotionSource {
       tier: get("tier")?.select?.name ?? null,
       agent: get("agent")?.select?.name ?? null,
       archived: get("archived")?.checkbox === true,
+      draft: get("draft")?.checkbox === true,
       notes: "",
       summary: "",
       _statusKind: statusProp?.status ? "status" : "select",

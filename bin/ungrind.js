@@ -15,6 +15,7 @@ import { propose, listProposals, accept, reject } from "../src/proposals.js";
 import { serveBoard, writeBoard } from "../src/board.js";
 import { buildProjectState, saveCard, initProject, findConfig } from "../src/app.js";
 import fs from "node:fs";
+import { discover } from "../src/discover.js";
 
 const HELP = `ungrind: ship your side projects without the grind
 
@@ -40,6 +41,7 @@ Commands:
   board [--port 4477]  Read-only board of tasks and recent runs on http://127.0.0.1 (localhost only)
       --out <file>       Write a static HTML snapshot instead of serving
   init --dir <folder>  Write a starter config and tasks folder (never overwrites); prints JSON
+  discover [--max n]   First pass: the strongest tier reads the repo and drafts feature cards; prints JSON
   state                Print project rules, feature cards, and recent runs as JSON (for front ends)
   card-save            Create or update a card from JSON on stdin (local files); prints JSON
   bench                Run the benchmark suite in throwaway copies of its fixture (no --config needed)
@@ -141,6 +143,11 @@ async function main() {
       if (!id) throw new Error(`${cmd} needs a proposal id (see \`ungrind proposals\`)`);
       (cmd === "accept" ? accept : reject)({ config, id });
       return;
+    }
+    case "discover": {
+      const max = typeof args.max === "string" ? Number(args.max) : 12;
+      const r = await discover({ config, source: source(), runners: runners(), templates: templates(), max, log: (m) => console.error(m) });
+      return console.log(JSON.stringify(r));
     }
     case "state":
       return console.log(JSON.stringify(await buildProjectState(config, source())));
